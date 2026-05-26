@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    name: ${{ matrix.variant }} / ${{ matrix.target }} / ${{ matrix.sdk }}
+    name: ${{ matrix.target }} / ${{ matrix.sdk }}
     strategy:
       fail-fast: false
       matrix:
@@ -19,9 +19,6 @@ jobs:
         sdk:
           - '23.05.6'    # ipk
           - '24.10.0'    # apk
-        variant:
-          - lite
-          - full
     runs-on: ubuntu-latest
 
     steps:
@@ -91,17 +88,21 @@ jobs:
         run: |
           cp -r Makefile patches files "${{ steps.prep.outputs.sdk_dir }}/package/easytier"
 
-      - name: Build package
+      - name: Build full variant
         working-directory: ${{ steps.prep.outputs.sdk_dir }}
         run: |
-          pkg=$( [ "${{ matrix.variant }}" = "lite" ] && echo "easytier-lite" || echo "easytier" )
-          make "package/${pkg}/compile" V=s || make "package/${pkg}/compile" V=s
+          make "package/easytier/compile" V=s || make "package/easytier/compile" V=s
+
+      - name: Build lite variant
+        working-directory: ${{ steps.prep.outputs.sdk_dir }}
+        run: |
+          make "package/easytier-lite/compile" V=s || make "package/easytier-lite/compile" V=s
 
       - name: Upload package artifacts
         uses: actions/upload-artifact@v4
         with:
           name: >-
-            easytier-${{ matrix.variant }}-${{ steps.prep.outputs.slug }}-${{ steps.prep.outputs.pkg_fmt }}
+            easytier-${{ steps.prep.outputs.slug }}-${{ steps.prep.outputs.pkg_fmt }}
           path: >-
             ${{ steps.prep.outputs.sdk_dir }}/bin/packages/**/*.${{ steps.prep.outputs.pkg_fmt }}
           if-no-files-found: warn
