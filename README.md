@@ -49,20 +49,20 @@ Multiple `config easytier` sections can be defined for multi-instance (each sect
 |--------|------|---------|---------------|-------------|
 | `network_name` | string | `easytier` | `--network-name` | Network identity (required, nodes with the same name form a virtual LAN) |
 | `network_secret` | string | (empty) | `--network-secret` | Network secret for authentication |
-| `ipv4` | string | (empty/DHCP) | `-i` | Virtual IPv4 address (CIDR notation) |
+| `ipv4` | string | (empty/DHCP) | `--ipv4` | Virtual IPv4 address (CIDR notation) |
 | `ipv6` | string | (empty) | `--ipv6` | Virtual IPv6 address |
-| `dhcp` | bool | `0` | `-d` | Auto-assign IP via DHCP |
+| `dhcp` | bool | `0` | `--dhcp` | Auto-assign IP via DHCP |
 | `hostname` | string | (system) | `--hostname` | Device hostname, used by Magic DNS as `<hostname>.<tld_dns_zone>` |
-| `instance_name` | string | (section name) | `-m` | Instance name for identifying this VPN instance |
-| `peers` | list | - | `-p` | Initial peer node addresses to connect to |
-| `external_node` | list | - | `-e` | Public shared node addresses for peer discovery |
-| `proxy_networks` | list | - | `-n` | Export local subnets (supports mapping: `10.0.0.0/24->192.168.0.0/24`) |
+| `instance_name` | string | (section name) | `--instance-name` | Instance name for identifying this VPN instance |
+| `peers` | list | - | `--peers` | Initial peer node addresses to connect to |
+| `external_node` | list | - | `--external-node` | Public shared node addresses for peer discovery |
+| `proxy_networks` | list | - | `--proxy-networks` | Export local subnets (supports mapping: `10.0.0.0/24->192.168.0.0/24`) |
 
 ### Listener Settings
 
 | Option | Type | Default | CLI Equivalent | Description |
 |--------|------|---------|---------------|-------------|
-| `listeners` | list | (built-in defaults) | `-l` | Listener URLs (tcp, udp, ws, wss, quic, faketcp) |
+| `listeners` | list | (built-in defaults) | `--listeners` | Listener URLs (tcp, udp, ws, wss, quic, faketcp) |
 | `mapped_listeners` | list | - | `--mapped-listeners` | Public address mapping for listeners (behind NAT) |
 | `default_protocol` | string | `tcp` | `--default-protocol` | Default protocol for connecting to peers |
 | `no_listener` | bool | `0` | `--no-listener` | Don't listen on any port, only connect to peers |
@@ -71,14 +71,14 @@ Multiple `config easytier` sections can be defined for multi-instance (each sect
 
 | Option | Type | Default | CLI Equivalent | Description |
 |--------|------|---------|---------------|-------------|
-| `rpc_portal` | string | (empty) | `-r` | RPC management portal address (`0` = random port) |
+| `rpc_portal` | string | (empty) | `--rpc-portal` | RPC management portal address (`0` = random port) |
 | `rpc_portal_whitelist` | string | (empty) | `--rpc-portal-whitelist` | RPC access whitelist (CIDR, comma-separated) |
 
 ### Encryption & Security
 
 | Option | Type | Default | CLI Equivalent | Description |
 |--------|------|---------|---------------|-------------|
-| `disable_encryption` | bool | `0` | `-u` | Disable encryption for peer communication |
+| `disable_encryption` | bool | `0` | `--disable-encryption` | Disable encryption for peer communication |
 | `encryption_algorithm` | string | (built-in) | `--encryption-algorithm` | `xor`, `aes-gcm`, `aes-256-gcm`, `chacha20` |
 
 ### Other Settings

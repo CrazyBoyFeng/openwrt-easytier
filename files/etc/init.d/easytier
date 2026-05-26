@@ -80,14 +80,14 @@ start_instance() {
         # --- 网络设置 (Network) ---
         procd_append_param command --network-name "$network_name"
         [ -n "$network_secret" ] && procd_append_param command --network-secret "$network_secret"
-        [ -n "$ipv4" ] && procd_append_param command -i "$ipv4"
+        [ -n "$ipv4" ] && procd_append_param command --ipv4 "$ipv4"
         [ -n "$ipv6" ] && procd_append_param command --ipv6 "$ipv6"
-        [ "$dhcp" = "1" ] && procd_append_param command -d
+        [ "$dhcp" = "1" ] && procd_append_param command --dhcp
         [ -n "$hostname" ] && procd_append_param command --hostname "$hostname"
-        [ -n "$instance_name" ] && procd_append_param command -m "$instance_name"
+        [ -n "$instance_name" ] && procd_append_param command --instance-name "$instance_name"
 
         # --instance-name: default to section name
-        [ -z "$instance_name" ] && procd_append_param command -m "$cfg"
+        [ -z "$instance_name" ] && procd_append_param command --instance-name "$cfg"
 
         # --dev-name: default to et_{section_name}
         [ -z "$dev_name" ] && procd_append_param command --dev-name "$tun_name"
@@ -95,22 +95,22 @@ start_instance() {
 
         # peers
         for p in $peers; do
-                procd_append_param command -p "$p"
+                procd_append_param command --peers "$p"
         done
 
         # external-node
         for e in $external_node; do
-                procd_append_param command -e "$e"
+                procd_append_param command --external-node "$e"
         done
 
         # proxy-networks
         for n in $proxy_networks; do
-                procd_append_param command -n "$n"
+                procd_append_param command --proxy-networks "$n"
         done
 
         # --- 监听器设置 (Listener) ---
         for l in $listeners; do
-                procd_append_param command -l "$l"
+                procd_append_param command --listeners "$l"
         done
 
         for ml in $mapped_listeners; do
@@ -121,11 +121,11 @@ start_instance() {
         [ "$no_listener" = "1" ] && procd_append_param command --no-listener
 
         # --- RPC 设置 ---
-        [ -n "$rpc_portal" ] && procd_append_param command -r "$rpc_portal"
+        [ -n "$rpc_portal" ] && procd_append_param command --rpc-portal "$rpc_portal"
         [ -n "$rpc_portal_whitelist" ] && procd_append_param command --rpc-portal-whitelist "$rpc_portal_whitelist"
 
         # --- 加密与安全 ---
-        [ "$disable_encryption" = "1" ] && procd_append_param command -u
+        [ "$disable_encryption" = "1" ] && procd_append_param command --disable-encryption
         [ -n "$encryption_algorithm" ] && procd_append_param command --encryption-algorithm "$encryption_algorithm"
 
         # --- 其他设置 ---
