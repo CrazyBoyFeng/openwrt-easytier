@@ -22,14 +22,14 @@ Both variants install `easytier-core` binary only. No `easytier-cli` is included
 vi /etc/config/easytier
 
 # 2. Set network name and secret (REQUIRED)
-uci set easytier.main.network_name='my-private-network'
-uci set easytier.main.network_secret='my-secret-password'
+uci set easytier.easytier.network_name='my-private-network'
+uci set easytier.easytier.network_secret='my-secret-password'
 
 # 3. Set your virtual IP or leave empty for DHCP auto-assign
-uci set easytier.main.ipv4='10.144.144.1/24'
+uci set easytier.easytier.ipv4='10.144.144.1/24'
 
 # 4. Add peer nodes
-uci add_list easytier.main.peers='tcp://peer.example.com:11010'
+uci add_list easytier.easytier.peers='tcp://peer.example.com:11010'
 
 # 5. Commit and start
 uci commit easytier
@@ -39,83 +39,101 @@ uci commit easytier
 
 ## UCI Configuration
 
-All options are in `/etc/config/easytier`:
+All options are defined in a single `config easytier` section in `/etc/config/easytier`.
 
-### Main (`config easytier`)
+Multiple `config easytier` sections can be defined for multi-instance (each section starts an independent `easytier-core` process with its own TUN device and firewall zone). The **section name** is used as the default value for `--instance-name` and `--dev-name` (`et_{section_name}`).
+
+### Network Settings
 
 | Option | Type | Default | CLI Equivalent | Description |
 |--------|------|---------|---------------|-------------|
-| `network_name` | string | `easytier` | `--network-name` | Network identity (required) |
+| `network_name` | string | `easytier` | `--network-name` | Network identity (required, nodes with the same name form a virtual LAN) |
 | `network_secret` | string | (empty) | `--network-secret` | Network secret for authentication |
-| `ipv4` | string | (empty/DHCP) | `-i` | Virtual IPv4 (CIDR) |
-| `ipv6` | string | (empty) | `--ipv6` | Virtual IPv6 |
-| `hostname` | string | (system) | `--hostname` | Hostname for Magic DNS |
-| `instance_name` | string | (empty) | `-m` | Instance name |
-| `peers` | list | - | `-p` | Peer node URLs |
-| `listeners` | list | (default) | `-l` | Listener addresses |
-| `external_node` | string | (empty) | `-e` | Public discovery node |
-| `proxy_networks` | list | - | `-n` | Export local subnets (supports mapping) |
-| `mapped_listeners` | list | - | `--mapped-listeners` | Public mapped addresses |
-| `default_protocol` | string | `tcp` | `--default-protocol` | Default protocol for peers |
-| `no_listener` | bool | `0` | `--no-listener` | Don't listen on any port |
+| `ipv4` | string | (empty/DHCP) | `-i` | Virtual IPv4 address (CIDR notation) |
+| `ipv6` | string | (empty) | `--ipv6` | Virtual IPv6 address |
+| `dhcp` | bool | `0` | `-d` | Auto-assign IP via DHCP |
+| `hostname` | string | (system) | `--hostname` | Device hostname, used by Magic DNS as `<hostname>.<tld_dns_zone>` |
+| `instance_name` | string | (section name) | `-m` | Instance name for identifying this VPN instance |
+| `peers` | list | - | `-p` | Initial peer node addresses to connect to |
+| `external_node` | list | - | `-e` | Public shared node addresses for peer discovery |
+| `proxy_networks` | list | - | `-n` | Export local subnets (supports mapping: `10.0.0.0/24->192.168.0.0/24`) |
 
-### Advanced (`config advanced`)
+### Listener Settings
 
 | Option | Type | Default | CLI Equivalent | Description |
 |--------|------|---------|---------------|-------------|
-| `encryption_algorithm` | string | (built-in) | `--encryption-algorithm` | `aes-gcm`, `aes-256-gcm`, `xor` |
-| `disable_encryption` | bool | `0` | `-u` | Disable encryption |
-| `console_log_level` | string | `info` | `--console-log-level` | Console log level |
+| `listeners` | list | (built-in defaults) | `-l` | Listener URLs (tcp, udp, ws, wss, quic, faketcp) |
+| `mapped_listeners` | list | - | `--mapped-listeners` | Public address mapping for listeners (behind NAT) |
+| `default_protocol` | string | `tcp` | `--default-protocol` | Default protocol for connecting to peers |
+| `no_listener` | bool | `0` | `--no-listener` | Don't listen on any port, only connect to peers |
+
+### RPC Settings
+
+| Option | Type | Default | CLI Equivalent | Description |
+|--------|------|---------|---------------|-------------|
+| `rpc_portal` | string | (empty) | `-r` | RPC management portal address (`0` = random port) |
+| `rpc_portal_whitelist` | string | (empty) | `--rpc-portal-whitelist` | RPC access whitelist (CIDR, comma-separated) |
+
+### Encryption & Security
+
+| Option | Type | Default | CLI Equivalent | Description |
+|--------|------|---------|---------------|-------------|
+| `disable_encryption` | bool | `0` | `-u` | Disable encryption for peer communication |
+| `encryption_algorithm` | string | (built-in) | `--encryption-algorithm` | `xor`, `aes-gcm`, `aes-256-gcm`, `chacha20` |
+
+### Other Settings
+
+| Option | Type | Default | CLI Equivalent | Description |
+|--------|------|---------|---------------|-------------|
+| `dev_name` | string | `et_{section_name}` | `--dev-name` | TUN device name |
+| `mtu` | uint | (auto) | `--mtu` | MTU for the TUN device |
+| `accept_dns` | bool | `0` | `--accept-dns` | Enable Magic DNS |
+| `tld_dns_zone` | string | `et.net` | `--tld-dns-zone` | TLD DNS zone for Magic DNS |
+| `latency_first` | bool | `0` | `--latency-first` | Use latency-priority routing |
+| `compression` | string | (none) | `--compression` | Compression algorithm: `none`, `zstd` |
+| `proxy_forward_by_system` | bool | `0` | `--proxy-forward-by-system` | Forward proxy traffic via system routing table |
+
+### P2P Settings
+
+| Option | Type | Default | CLI Equivalent | Description |
+|--------|------|---------|---------------|-------------|
+| `disable_p2p` | bool | `0` | `--disable-p2p` | Disable P2P |
+| `p2p_only` | bool | `0` | `--p2p-only` | Only communicate with established P2P peers |
+| `lazy_p2p` | bool | `0` | `--lazy-p2p` | Establish P2P only when traffic needs it |
+| `need_p2p` | bool | `0` | `--need-p2p` | Ask peers to proactively establish P2P |
+| `disable_udp_hole_punching` | bool | `0` | `--disable-udp-hole-punching` | Disable UDP hole punching |
+| `disable_tcp_hole_punching` | bool | `0` | `--disable-tcp-hole-punching` | Disable TCP hole punching |
+| `disable_sym_hole_punching` | bool | `0` | `--disable-sym-hole-punching` | Disable symmetric NAT hole punching |
+
+### Logging Settings
+
+| Option | Type | Default | CLI Equivalent | Description |
+|--------|------|---------|---------------|-------------|
+| `console_log_level` | string | `info` | `--console-log-level` | Console log level: `off`, `error`, `warn`, `info`, `debug`, `trace` |
 | `file_log_level` | string | (empty) | `--file-log-level` | File log level |
-| `file_log_dir` | string | (empty) | `--file-log-dir` | Log file directory |
+| `file_log_dir` | string | (empty) | `--file-log-dir` | Log file directory (empty = disabled) |
 | `file_log_size` | uint | `100` | `--file-log-size` | Per-file log size (MB) |
 | `file_log_count` | uint | `10` | `--file-log-count` | Max log file count |
-| `accept_dns` | bool | `0` | `--accept-dns` | Enable Magic DNS |
-| `tld_dns_zone` | string | `et.net.` | `--tld-dns-zone` | DNS zone for Magic DNS |
-| `mtu` | uint | (auto) | `--mtu` | TUN device MTU |
-| `dev_name` | string | (auto) | `--dev-name` | TUN device name |
-| `compression` | string | (none) | `--compression` | `none` or `zstd` |
-| `enable_kcp_proxy` | bool | `0` | `--enable-kcp-proxy` | KCP proxy for TCP streams |
-| `enable_quic_proxy` | bool | `0` | `--enable-quic-proxy` | QUIC proxy for TCP streams |
 
-### P2P (`config p2p`)
+### OpenWrt Integration
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `disable_p2p` | bool | `0` | Disable P2P |
-| `p2p_only` | bool | `0` | Only use established P2P |
-| `lazy_p2p` | bool | `0` | Establish P2P on demand |
-| `need_p2p` | bool | `0` | Ask peers to proactively P2P |
-| `disable_udp_hole_punching` | bool | `0` | Disable UDP hole punching |
-| `disable_tcp_hole_punching` | bool | `0` | Disable TCP hole punching |
-| `disable_sym_hole_punching` | bool | `0` | Disable symmetric NAT punching |
-
-### RPC (`config rpc`)
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `rpc_portal` | string | `0` | RPC portal address |
-| `rpc_portal_whitelist` | string | (empty) | RPC whitelist (CIDR) |
-
-### Network (`config network`) - OpenWrt specific
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `iface_name` | string | `et0` | OpenWrt interface name (netifd) |
-| `auto_firewall` | bool | `1` | Auto-configure firewall |
-| `firewall_zone` | string | `lan` | Firewall zone to attach |
-| `auto_dnsmasq` | bool | `1` | Auto-configure dnsmasq for Magic DNS |
+| `auto_firewall` | bool | `1` | Automatically create a firewall zone (named after the section) with `masq` and `mtu_fix`, plus bidirectional forwarding to `firewall_zone` |
+| `firewall_zone` | string | `lan` | Firewall zone to forward traffic to/from |
+| `auto_dnsmasq` | bool | `1` | Automatically configure dnsmasq to forward `tld_dns_zone` queries to `100.100.100.101` |
 
 ## What the init.d Script Does
 
 The procd init script automatically handles:
 
-1. **Process management** - Start/stop/restart easytier-core via procd, auto-respawn on crash
-2. **Network interface** - Detect TUN interface, register with netifd
-3. **Firewall** - Create `easytier` zone, add forwarding rules between easytier and LAN zone
-4. **DNS (Magic DNS)** - Add dnsmasq server directive `server=/et.net/100.100.100.101` to forward DNS queries to Magic DNS resolver
-5. **Cleanup** - Remove all firewall rules, dnsmasq config, netifd interface on stop
-6. **Hot reload** - UCI changes trigger automatic restart via `procd_add_reload_trigger`
+1. **IP forwarding** - Enable `net.ipv4.ip_forward` on start (required for VPN routing)
+2. **Process management** - Start/stop/restart `easytier-core` via procd, auto-respawn on crash
+3. **TUN device** - Wait for the TUN device to appear and bring it up
+4. **Firewall** - Create a firewall zone (named after the section) with `masq` and `mtu_fix`, and bidirectional forwarding rules between the EasyTier zone and `firewall_zone`
+5. **DNS (Magic DNS)** - Add a dnsmasq server directive to forward `tld_dns_zone` queries to the Magic DNS resolver (`100.100.100.101`)
+6. **Cleanup** - Remove all firewall rules, dnsmasq config on stop
+7. **Hot reload** - UCI changes trigger automatic restart via `procd_add_reload_trigger`
 
 ### Magic DNS on OpenWrt
 
@@ -124,9 +142,31 @@ When `accept_dns` is enabled, the init script adds a dnsmasq forwarding rule:
 server=/et.net/100.100.100.101
 ```
 
-This forwards all `*.et.net` DNS queries to `100.100.100.101`, which is the Magic DNS resolver address hardcoded in easytier-core (`MAGIC_DNS_FAKE_IP`). The resolver intercepts DNS packets on the TUN interface and resolves peer hostnames.
+This forwards all `*.et.net` DNS queries to `100.100.100.101`, which is the Magic DNS resolver address hardcoded in easytier-core. The resolver intercepts DNS packets on the TUN interface and resolves peer hostnames.
 
 LAN devices can then access EasyTier peers via `hostname.et.net`.
+
+## Multi-Instance Example
+
+```uci
+config easytier 'office'
+    option enabled '1'
+    option network_name 'office-net'
+    option network_secret 'secret1'
+    option ipv4 '10.144.144.1/24'
+    list peers 'tcp://office.example.com:11010'
+
+config easytier 'home'
+    option enabled '1'
+    option network_name 'home-net'
+    option network_secret 'secret2'
+    option ipv4 '10.192.192.1/24'
+    list peers 'tcp://home.example.com:11010'
+```
+
+This creates two independent VPN instances:
+- `office`: TUN device `et_office`, firewall zone `office`
+- `home`: TUN device `et_home`, firewall zone `home`
 
 ## Build from Source
 
@@ -135,11 +175,7 @@ LAN devices can then access EasyTier peers via `hostname.et.net`.
 ```sh
 # Clone into your SDK's package directory
 git clone https://github.com/CrazyBoyFeng/openwrt-easytier.git \
-    feeds/packages/net/easytier
-
-# Update feeds
-./scripts/feeds update -a
-./scripts/feeds install -a
+    package/easytier
 
 # Configure (select Network -> VPN -> easytier-lite or easytier)
 make menuconfig
@@ -161,8 +197,8 @@ logread -f | grep easytier
 logread -e easytier
 
 # Enable file logging (persistent)
-uci set easytier.advanced.file_log_dir='/var/log/easytier'
-uci set easytier.advanced.file_log_level='debug'
+uci set easytier.easytier.file_log_dir='/var/log/easytier'
+uci set easytier.easytier.file_log_level='debug'
 uci commit easytier
 /etc/init.d/easytier restart
 ```
