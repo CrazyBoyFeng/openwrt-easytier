@@ -20,6 +20,8 @@ jobs:
           - '23.05.6'    # ipk
           - '24.10.0'    # apk
     runs-on: ubuntu-latest
+    env:
+      TERM: xterm
 
     steps:
       - name: Checkout
