@@ -11,69 +11,100 @@
 # https://github.com/EasyTier/EasyTier/blob/main/easytier-core/README.md
 
 config easytier 'easytier'
-        option enabled '1'
+	option enabled '1'
 
-        # ===== 网络设置 (Network Settings) =====
+	# ===== 配置服务器 (Config Server) =====
 
-        option network_name 'easytier'
-        option network_secret ''
+	# option config_server ''
+	# option machine_id ''
 
-        # option ipv4 '10.144.144.1/24'
-        # option ipv6 ''
-        # option dhcp '0'
-        # option hostname ''
-        # option instance_name ''
-        # list peers 'tcp://1.2.3.4:11010'
-        # list external_node 'tcp://public.example.com:11010'
-        # list proxy_networks '192.168.1.0/24'
+	# ===== 网络设置 (Network Settings) =====
 
-        # ===== 监听器设置 (Listener Settings) =====
+	option network_name 'easytier'
+	option network_secret ''
 
-        # list listeners 'tcp://0.0.0.0:11010'
-        # list mapped_listeners 'tcp://123.123.123.123:11010'
-        # option default_protocol ''
-        # option no_listener '0'
+	# option secure_mode '0'
+	# option local_private_key ''
+	# option local_public_key ''
+	# option credential ''
+	# option credential_file ''
+	# option ipv4 '10.144.144.1/24'
+	# option ipv6 ''
+	# option dhcp '0'
+	# option hostname ''
+	# option instance_name ''
+	# list peers 'tcp://1.2.3.4:11010'
+	# list external_node 'tcp://public.example.com:11010'
+	# list proxy_networks '192.168.1.0/24'
 
-        # ===== RPC 设置 (RPC Settings) =====
+	# ===== RPC 设置 (RPC Settings) =====
 
-        # option rpc_portal ''
-        # option rpc_portal_whitelist ''
+	# option rpc_portal ''
+	# option rpc_portal_whitelist ''
 
-        # ===== 加密与安全 (Encryption & Security) =====
+	# ===== 监听器设置 (Listener Settings) =====
 
-        # option disable_encryption '0'
-        # option encryption_algorithm ''
+	# list listeners 'tcp://0.0.0.0:11010'
+	# list mapped_listeners 'tcp://123.123.123.123:11010'
+	# option default_protocol ''
+	# option no_listener '0'
 
-        # ===== 其他设置 (Other Settings) =====
+	# ===== 其他设置 (Other Settings) =====
 
-        # option dev_name ''
-        # option mtu ''
-        # option accept_dns '0'
-        # option tld_dns_zone 'et.net'
-        # option latency_first '0'
-        # option compression ''
-        # option proxy_forward_by_system '0'
+	# option vpn_portal ''
+	# option disable_encryption '0'
+	# option encryption_algorithm ''
+	# option multi_thread '0'
+	# option multi_thread_count ''
+	# option disable_ipv6 '0'
+	# option dev_name ''
+	# option mtu ''
+	# option latency_first '0'
+	# list exit_nodes ''
+	# option enable_exit_node '0'
+	# option proxy_forward_by_system '0'
+	# option no_tun '0'
+	# option use_smoltcp '0'
+	# list manual_routes ''
+	# option relay_network_whitelist ''
+	# option p2p_only '0'
+	# option lazy_p2p '0'
+	# option disable_p2p '0'
+	# option need_p2p '0'
+	# option disable_tcp_hole_punching '0'
+	# option disable_udp_hole_punching '0'
+	# option disable_sym_hole_punching '0'
+	# option relay_all_peer_rpc '0'
+	# option socks5 ''
+	# option compression ''
+	# option bind_device ''
+	# option enable_kcp_proxy '0'
+	# option disable_kcp_input '0'
+	# option enable_quic_proxy '0'
+	# option disable_quic_input '0'
+	# option quic_listen_port ''
+	# list port_forward ''
+	# option accept_dns '0'
+	# option tld_dns_zone 'et.net'
+	# option private_mode '0'
+	# option foreign_relay_bps_limit ''
+	# option tcp_whitelist ''
+	# option udp_whitelist ''
+	# option disable_relay_kcp '0'
+	# option enable_relay_foreign_network_kcp '0'
+	# list stun_servers ''
+	# list stun_servers_v6 ''
 
-        # ===== P2P 设置 (P2P Settings) =====
+	# ===== 日志设置 (Logging Settings) =====
 
-        # option disable_p2p '0'
-        # option p2p_only '0'
-        # option lazy_p2p '0'
-        # option need_p2p '0'
-        # option disable_udp_hole_punching '0'
-        # option disable_tcp_hole_punching '0'
-        # option disable_sym_hole_punching '0'
+	option console_log_level 'info'
+	# option file_log_level ''
+	# option file_log_dir ''
+	# option file_log_size ''
+	# option file_log_count ''
 
-        # ===== 日志设置 (Logging Settings) =====
+	# ===== OpenWrt 集成 (OpenWrt Integration) =====
 
-        option console_log_level 'info'
-        # option file_log_level ''
-        # option file_log_dir ''
-        # option file_log_size ''
-        # option file_log_count ''
-
-        # ===== OpenWrt 集成 (OpenWrt Integration) =====
-
-        option auto_firewall '1'
-        option firewall_zone 'lan'
-        option auto_dnsmasq '1'
+	option auto_firewall '1'
+	option firewall_zone 'lan'
+	option auto_dnsmasq '1'
