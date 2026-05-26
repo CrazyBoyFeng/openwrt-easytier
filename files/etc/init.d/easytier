@@ -17,6 +17,8 @@ validate_easytier_section() {
                 'enabled:bool:1' \
                 'config_server:string' \
                 'machine_id:string' \
+                'config_file:string' \
+                'config_dir:string' \
                 'network_name:string:easytier' \
                 'network_secret:string' \
                 'secure_mode:bool:0' \
@@ -104,6 +106,8 @@ start_instance() {
         # ===== 配置服务器 (Config Server) =====
         [ -n "$config_server" ] && procd_append_param command --config-server "$config_server"
         [ -n "$machine_id" ] && procd_append_param command --machine-id "$machine_id"
+        [ -n "$config_file" ] && procd_append_param command --config-file "$config_file"
+        [ -n "$config_dir" ] && procd_append_param command --config-dir "$config_dir"
 
         # ===== 网络设置 (Network Settings) =====
         [ -n "$network_name" ] && procd_append_param command --network-name "$network_name"
@@ -222,8 +226,8 @@ start_instance() {
 
         procd_close_instance
 
-        # Post-start: auto-configure network (skip in config-server mode)
-        if [ -z "$config_server" ]; then
+        # Post-start: auto-configure network (skip when using external config)
+        if [ -z "$config_server" ] && [ -z "$config_file" ] && [ -z "$config_dir" ]; then
                 setup_network "$cfg"
         fi
 }

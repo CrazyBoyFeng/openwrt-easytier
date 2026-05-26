@@ -37,16 +37,22 @@ uci commit easytier
 /etc/init.d/easytier start
 ```
 
-## Config-Server Mode
+## External Config Modes
 
-Set `config_server` to connect to a remote config server. When `config_server` is set, **network interface and firewall are NOT auto-configured** — similar to how [ZeroTier](https://openwrt.org/docs/guide-user/services/vpn/zerotier) and [Tailscale](https://openwrt.org/docs/guide-user/services/vpn/tailscale) work on OpenWrt. Users must manually configure `/etc/config/network` and `/etc/config/firewall`.
+When any of `config_server`, `config_file`, or `config_dir` is set, **network interface, firewall, and DNS are NOT auto-configured** — similar to how [ZeroTier](https://openwrt.org/docs/guide-user/services/vpn/zerotier) and [Tailscale](https://openwrt.org/docs/guide-user/services/vpn/tailscale) work on OpenWrt. Users must manually configure `/etc/config/network` and `/etc/config/firewall`.
 
 ```uci
+# Config server
 config easytier 'easytier'
     option enabled '1'
-    option config_server 'admin'          # official server (short form)
-    # option config_server 'udp://127.0.0.1:22020/admin'  # or full URL
-    # option machine_id ''               # optional, auto-detected if empty
+    option config_server 'admin'
+    # option machine_id ''
+
+# Config file
+# option config_file '/etc/easytier/config.toml'
+
+# Config directory (load all .toml, persist config-server settings)
+# option config_dir '/etc/easytier'
 ```
 
 ## UCI Configuration
@@ -57,12 +63,14 @@ Multiple `config easytier` sections can be defined for multi-instance (each sect
 
 Options are ordered following the [official documentation](https://easytier.cn/guide/network/configurations.html).
 
-### Config Server
+### Config Server / File / Directory
 
 | Option | Type | Default | CLI Equivalent | Description |
 |--------|------|---------|---------------|-------------|
 | `config_server` | string | (empty) | `--config-server` | Config server address (URL or username for official server) |
 | `machine_id` | string | (auto) | `--machine-id` | Machine ID for config server identification (auto-detected if empty) |
+| `config_file` | string | (empty) | `--config-file` | TOML config file path (CLI options override file options) |
+| `config_dir` | string | (empty) | `--config-dir` | Load all `.toml` files from a directory; also persists config-server settings |
 
 ### Network Settings
 
@@ -158,9 +166,9 @@ Options are ordered following the [official documentation](https://easytier.cn/g
 | `file_log_size` | uint | `100` | `--file-log-size` | Per-file log size (MB) |
 | `file_log_count` | uint | `10` | `--file-log-count` | Max log file count |
 
-### OpenWrt Integration (not effective in config-server mode)
+### OpenWrt Integration
 
-These options are only effective when `config_server` is not set.
+Only effective when none of `config_server`, `config_file`, `config_dir` is set.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
@@ -175,8 +183,8 @@ The procd init script automatically handles:
 1. **IP forwarding** - Enable `net.ipv4.ip_forward` on start
 2. **Process management** - Start/stop/restart `easytier-core` via procd, auto-respawn
 3. **TUN device** - Wait for TUN device, bring it up
-4. **Firewall** - Create zone with `masq`/`mtu_fix`, bidirectional forwarding (not in config-server mode)
-5. **DNS (Magic DNS)** - Add dnsmasq forwarding rule for `tld_dns_zone` (not in config-server mode)
+4. **Firewall** - Create zone with `masq`/`mtu_fix`, bidirectional forwarding (not in external config mode)
+5. **DNS (Magic DNS)** - Add dnsmasq forwarding rule for `tld_dns_zone` (not in external config mode)
 6. **Cleanup** - Remove firewall rules and dnsmasq config on stop
 7. **Hot reload** - UCI changes trigger automatic restart via `procd_add_reload_trigger`
 
