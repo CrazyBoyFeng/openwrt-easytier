@@ -86,7 +86,8 @@ jobs:
 
       - name: Copy package into SDK
         run: |
-          cp -r Makefile patches files "${{ steps.prep.outputs.sdk_dir }}/package/easytier"
+          mkdir -p "${{ steps.prep.outputs.sdk_dir }}/package/easytier"
+          cp -r Makefile patches files "${{ steps.prep.outputs.sdk_dir }}/package/easytier/"
 
       - name: Build full variant
         working-directory: ${{ steps.prep.outputs.sdk_dir }}
