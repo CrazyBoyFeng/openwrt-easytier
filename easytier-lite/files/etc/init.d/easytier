@@ -1,69 +1,57 @@
 #!/bin/sh /etc/rc.common
 # EasyTier init.d script for OpenWrt (procd)
+#
+# Supports multiple instances: each 'config easytier' section starts
+# an independent easytier-core process with its own TUN device,
+# firewall zone, and dnsmasq configuration.
 
 START=99
 USE_PROCD=1
 PROG=/usr/bin/easytier-core
 
-validate_easytier() {
+# Magic DNS resolver address (hardcoded in easytier-core source)
+MAGIC_DNS_IP="100.100.100.101"
+
+validate_easytier_section() {
 	uci_load_validate "easytier" "$1" "$2" "$3" \
+		'enabled:bool:1' \
 		'network_name:string:easytier' \
 		'network_secret:string' \
 		'ipv4:string' \
 		'ipv6:string' \
+		'dhcp:bool:0' \
 		'hostname:string' \
 		'instance_name:string' \
-		'listeners:list(string)' \
 		'peers:list(string)' \
-		'external_node:string' \
+		'external_node:list(string)' \
 		'proxy_networks:list(string)' \
+		'listeners:list(string)' \
 		'mapped_listeners:list(string)' \
 		'default_protocol:string' \
-		'no_listener:bool:0'
-}
-
-validate_advanced() {
-	uci_load_validate "easytier" "$1" "$2" "$3" \
-		'encryption_algorithm:string' \
+		'no_listener:bool:0' \
+		'rpc_portal:string' \
+		'rpc_portal_whitelist:string' \
 		'disable_encryption:bool:0' \
-		'console_log_level:string:info' \
-		'file_log_level:string' \
-		'file_log_dir:string' \
-		'file_log_size:uinteger' \
-		'file_log_count:uinteger' \
-		'accept_dns:bool:0' \
-		'tld_dns_zone:string:et.net.' \
-		'mtu:uinteger' \
+		'encryption_algorithm:string' \
 		'dev_name:string' \
-		'multi_thread:bool:1' \
-		'multi_thread_count:uinteger' \
+		'mtu:uinteger' \
+		'accept_dns:bool:0' \
+		'tld_dns_zone:string:et.net' \
 		'latency_first:bool:0' \
 		'compression:string' \
-		'enable_kcp_proxy:bool:0' \
-		'enable_quic_proxy:bool:0' \
-		'enable_udp_broadcast_relay:bool:0'
-}
-
-validate_p2p() {
-	uci_load_validate "easytier" "$1" "$2" "$3" \
+		'proxy_forward_by_system:bool:0' \
 		'disable_p2p:bool:0' \
 		'p2p_only:bool:0' \
 		'lazy_p2p:bool:0' \
 		'need_p2p:bool:0' \
 		'disable_udp_hole_punching:bool:0' \
 		'disable_tcp_hole_punching:bool:0' \
-		'disable_sym_hole_punching:bool:0'
-}
-
-validate_rpc() {
-	uci_load_validate "easytier" "$1" "$2" "$3" \
-		'rpc_portal:string' \
-		'rpc_portal_whitelist:string'
-}
-
-validate_network() {
-	uci_load_validate "easytier" "$1" "$2" "$3" \
-		'iface_name:string:et0' \
+		'disable_sym_hole_punching:bool:0' \
+		'console_log_level:string:info' \
+		'file_log_level:string' \
+		'file_log_dir:string' \
+		'file_log_size:uinteger' \
+		'file_log_count:uinteger' \
 		'auto_firewall:bool:1' \
 		'firewall_zone:string:lan' \
 		'auto_dnsmasq:bool:1'
@@ -72,49 +60,59 @@ validate_network() {
 start_instance() {
 	local cfg="$1"
 
-	# Validate all config sections
-	validate_easytier "$cfg" "start_easytier" "$1" || return 1
-	validate_advanced "$cfg" "start_advanced" "$1" || return 1
-	validate_p2p "$cfg" "start_p2p" "$1" || true
-	validate_rpc "$cfg" "start_rpc" "$1" || true
-	validate_network "$cfg" "start_network" "$1" || true
+	validate_easytier_section "$cfg" "start_easytier" "$1" || return 1
+
+	[ "$enabled" = "0" ] && return 0
 
 	[ -z "$network_name" ] && {
-		logger -t easytier "network_name is required"
+		logger -t easytier "network_name is required for instance '$cfg'"
 		return 1
 	}
+
+	# Derive defaults from section name
+	local inst_name="${instance_name:-$cfg}"
+	local tun_name="${dev_name:-et_$cfg}"
 
 	# Build command arguments
 	procd_open_instance "easytier-$cfg"
 	procd_set_param command "$PROG"
 
-	# --- Network ---
+	# --- 网络设置 (Network) ---
 	procd_append_param command --network-name "$network_name"
 	[ -n "$network_secret" ] && procd_append_param command --network-secret "$network_secret"
 	[ -n "$ipv4" ] && procd_append_param command -i "$ipv4"
 	[ -n "$ipv6" ] && procd_append_param command --ipv6 "$ipv6"
+	[ "$dhcp" = "1" ] && procd_append_param command -d
 	[ -n "$hostname" ] && procd_append_param command --hostname "$hostname"
 	[ -n "$instance_name" ] && procd_append_param command -m "$instance_name"
 
-	# listeners (comma-separated to individual --listeners args)
-	local IFS=','
-	for l in $listeners; do
-		procd_append_param command -l "$l"
-	done
+	# --instance-name: default to section name
+	[ -z "$instance_name" ] && procd_append_param command -m "$cfg"
 
-	# peers (comma-separated to individual --peers args)
+	# --dev-name: default to et_{section_name}
+	[ -z "$dev_name" ] && procd_append_param command --dev-name "$tun_name"
+	[ -n "$dev_name" ] && procd_append_param command --dev-name "$dev_name"
+
+	# peers
 	for p in $peers; do
 		procd_append_param command -p "$p"
 	done
 
-	[ -n "$external_node" ] && procd_append_param command -e "$external_node"
+	# external-node
+	for e in $external_node; do
+		procd_append_param command -e "$e"
+	done
 
-	# proxy_networks (comma-separated to individual --proxy-networks args)
+	# proxy-networks
 	for n in $proxy_networks; do
 		procd_append_param command -n "$n"
 	done
 
-	# mapped_listeners
+	# --- 监听器设置 (Listener) ---
+	for l in $listeners; do
+		procd_append_param command -l "$l"
+	done
+
 	for ml in $mapped_listeners; do
 		procd_append_param command --mapped-listeners "$ml"
 	done
@@ -122,30 +120,23 @@ start_instance() {
 	[ -n "$default_protocol" ] && procd_append_param command --default-protocol "$default_protocol"
 	[ "$no_listener" = "1" ] && procd_append_param command --no-listener
 
-	# --- Advanced ---
-	[ -n "$encryption_algorithm" ] && procd_append_param command --encryption-algorithm "$encryption_algorithm"
+	# --- RPC 设置 ---
+	[ -n "$rpc_portal" ] && procd_append_param command -r "$rpc_portal"
+	[ -n "$rpc_portal_whitelist" ] && procd_append_param command --rpc-portal-whitelist "$rpc_portal_whitelist"
+
+	# --- 加密与安全 ---
 	[ "$disable_encryption" = "1" ] && procd_append_param command -u
+	[ -n "$encryption_algorithm" ] && procd_append_param command --encryption-algorithm "$encryption_algorithm"
 
-	procd_append_param command --console-log-level "${console_log_level:-info}"
-	[ -n "$file_log_level" ] && procd_append_param command --file-log-level "$file_log_level"
-	[ -n "$file_log_dir" ] && procd_append_param command --file-log-dir "$file_log_dir"
-	[ -n "$file_log_size" ] && procd_append_param command --file-log-size "$file_log_size"
-	[ -n "$file_log_count" ] && procd_append_param command --file-log-count "$file_log_count"
-
-	[ "$accept_dns" = "1" ] && procd_append_param command --accept-dns
-	[ -n "$tld_dns_zone" ] && [ "$accept_dns" = "1" ] && procd_append_param command --tld-dns-zone "$tld_dns_zone"
-
+	# --- 其他设置 ---
 	[ -n "$mtu" ] && procd_append_param command --mtu "$mtu"
-	[ -n "$dev_name" ] && procd_append_param command --dev-name "$dev_name"
-	[ "$multi_thread" = "0" ] && procd_append_param command --multi-thread=false
-	[ -n "$multi_thread_count" ] && procd_append_param command --multi-thread-count "$multi_thread_count"
+	[ "$accept_dns" = "1" ] && procd_append_param command --accept-dns
+	[ "$accept_dns" = "1" ] && procd_append_param command --tld-dns-zone "$tld_dns_zone"
 	[ "$latency_first" = "1" ] && procd_append_param command --latency-first
 	[ -n "$compression" ] && procd_append_param command --compression "$compression"
-	[ "$enable_kcp_proxy" = "1" ] && procd_append_param command --enable-kcp-proxy
-	[ "$enable_quic_proxy" = "1" ] && procd_append_param command --enable-quic-proxy
-	[ "$enable_udp_broadcast_relay" = "1" ] && procd_append_param command --enable-udp-broadcast-relay
+	[ "$proxy_forward_by_system" = "1" ] && procd_append_param command --proxy-forward-by-system
 
-	# --- P2P ---
+	# --- P2P 设置 ---
 	[ "$disable_p2p" = "1" ] && procd_append_param command --disable-p2p
 	[ "$p2p_only" = "1" ] && procd_append_param command --p2p-only
 	[ "$lazy_p2p" = "1" ] && procd_append_param command --lazy-p2p
@@ -154,12 +145,15 @@ start_instance() {
 	[ "$disable_tcp_hole_punching" = "1" ] && procd_append_param command --disable-tcp-hole-punching
 	[ "$disable_sym_hole_punching" = "1" ] && procd_append_param command --disable-sym-hole-punching
 
-	# --- RPC ---
-	[ -n "$rpc_portal" ] && procd_append_param command -r "$rpc_portal"
-	[ -n "$rpc_portal_whitelist" ] && procd_append_param command --rpc-portal-whitelist "$rpc_portal_whitelist"
+	# --- 日志设置 ---
+	procd_append_param command --console-log-level "${console_log_level:-info}"
+	[ -n "$file_log_level" ] && procd_append_param command --file-log-level "$file_log_level"
+	[ -n "$file_log_dir" ] && procd_append_param command --file-log-dir "$file_log_dir"
+	[ -n "$file_log_size" ] && procd_append_param command --file-log-size "$file_log_size"
+	[ -n "$file_log_count" ] && procd_append_param command --file-log-count "$file_log_count"
 
 	# --- procd settings ---
-	procd_set_param respawn ${respawn_threshold:-3600} ${respawn_timeout:-5} ${respawn_retry:-5}
+	procd_set_param respawn 3600 5 5
 	procd_set_param stdout 1
 	procd_set_param stderr 1
 	procd_set_param no_new_privs 1
@@ -188,172 +182,139 @@ stop() {
 
 service_triggers() {
 	procd_add_reload_trigger "easytier"
-	procd_add_combined_validate \
-		"validate_easytier" \
-		"validate_advanced" \
-		"validate_p2p" \
-		"validate_rpc" \
-		"validate_network"
+	procd_add_validate "validate_easytier_section"
 }
 
-# ============ Network & Firewall Setup ============
+# ============ Network, Firewall & DNS Setup ============
 
-ET_IFACE=""
-ET_LINK=""
-
-# Magic DNS fake IP (hardcoded in easytier-core source)
-MAGIC_DNS_FAKE_IP="100.100.100.101"
+# Get the effective TUN device name for a section
+_get_dev_name() {
+	local cfg="$1"
+	config_get val "$cfg" dev_name ""
+	echo "${val:-et_$cfg}"
+}
 
 setup_network() {
 	local cfg="$1"
-	local iface_name auto_firewall firewall_zone auto_dnsmasq
-	local accept_dns tld_dns_zone
+	local dev_name
+	dev_name=$(_get_dev_name "$cfg")
 
-	# Re-read config values
-	config_get iface_name "$cfg" iface_name "et0"
-	config_get auto_firewall "$cfg" auto_firewall "1"
-	config_get firewall_zone "$cfg" firewall_zone "lan"
-	config_get auto_dnsmasq "$cfg" auto_dnsmasq "1"
-	config_get accept_dns "$cfg" accept_dns "0"
-	config_get tld_dns_zone "$cfg" tld_dns_zone "et.net."
+	# Wait for TUN device to appear (up to 10 seconds)
+	local i=0
+	while [ $i -lt 10 ]; do
+		[ -d "/sys/class/net/$dev_name" ] && break
+		sleep 1
+		i=$((i + 1))
+	done
 
-	# Remove trailing dot for dnsmasq config
-	tld_dns_zone="${tld_dns_zone%.}"
-
-	ET_IFACE="$iface_name"
-
-	# Determine TUN device name (use dev_name if set, else detect)
-	local tun_dev
-	config_get tun_dev "$cfg" dev_name ""
-	if [ -z "$tun_dev" ]; then
-		# Detect: wait for any TUN device to appear (up to 10 seconds)
-		local i=0
-		while [ $i -lt 10 ]; do
-			for dev in /dev/net/tun; do
-				# Try to find the EasyTier interface by checking ip link
-				# EasyTier creates a TUN device, we look for it by process
-				tun_dev=$(ip link show 2>/dev/null | while read line; do
-					echo "$line" | grep -qE '^[0-9]+: (EasyTier|et|tun)' && \
-						echo "$line" | sed 's/^[0-9]*: \([^:@]*\).*/\1/'
-				done | head -1)
-				[ -n "$tun_dev" ] && break 2
-			done
-			sleep 1
-			i=$((i + 1))
-		done
-	fi
-
-	if [ -z "$tun_dev" ]; then
-		logger -t easytier "No TUN device found, skipping network setup"
+	if [ ! -d "/sys/class/net/$dev_name" ]; then
+		logger -t easytier "TUN device '$dev_name' not found, skipping network setup for '$cfg'"
 		return 0
 	fi
 
-	# Use the UCI interface name for netifd (not the TUN device name)
-	local netifd_name="$iface_name"
-
-	# Set link up
-	ip link set "$tun_dev" up
-
-	# Register with netifd
-	ET_LINK="easytier-$cfg"
-	ubus call network.interface add "{\"name\":\"$ET_LINK\",\"interface\":\"$tun_dev\"}" 2>/dev/null
-	ifconfig "$tun_dev" 0.0.0.0
-	ubus call network.interface "$ET_LINK" up 2>/dev/null
+	ip link set "$dev_name" up
 
 	# Configure firewall
 	if [ "$auto_firewall" = "1" ]; then
-		setup_firewall "$tun_dev" "$firewall_zone"
+		setup_firewall "$cfg" "$dev_name" "$firewall_zone"
 	fi
 
-	# Configure dnsmasq for magic-dns
+	# Configure dnsmasq for Magic DNS
 	if [ "$accept_dns" = "1" ] && [ "$auto_dnsmasq" = "1" ]; then
-		setup_dnsmasq "$tld_dns_zone"
+		setup_dnsmasq "$cfg" "$tld_dns_zone"
 	fi
 }
 
 teardown_network() {
 	local cfg="$1"
-	local iface_name auto_firewall auto_dnsmasq accept_dns tld_dns_zone
+	local auto_firewall firewall_zone accept_dns tld_dns_zone auto_dnsmasq
 
-	config_get iface_name "$cfg" iface_name "et0"
 	config_get auto_firewall "$cfg" auto_firewall "1"
-	config_get auto_dnsmasq "$cfg" auto_dnsmasq "1"
+	config_get firewall_zone "$cfg" firewall_zone "lan"
 	config_get accept_dns "$cfg" accept_dns "0"
-	config_get tld_dns_zone "$cfg" tld_dns_zone "et.net."
-	tld_dns_zone="${tld_dns_zone%.}"
+	config_get tld_dns_zone "$cfg" tld_dns_zone "et.net"
+	config_get auto_dnsmasq "$cfg" auto_dnsmasq "1"
 
-	ET_LINK="easytier-$cfg"
-
-	# Remove dnsmasq config
+	# Remove dnsmasq config first (before firewall, as dnsmasq may need firewall)
 	if [ "$accept_dns" = "1" ] && [ "$auto_dnsmasq" = "1" ]; then
-		teardown_dnsmasq "$tld_dns_zone"
+		teardown_dnsmasq "$cfg"
 	fi
 
 	# Remove firewall rules
 	if [ "$auto_firewall" = "1" ]; then
-		teardown_firewall
+		teardown_firewall "$cfg"
 	fi
-
-	# Remove netifd interface
-	ubus call network.interface "$ET_LINK" down 2>/dev/null
-	ubus call network.interface remove "{\"name\":\"$ET_LINK\"}" 2>/dev/null
 }
 
-setup_firewall() {
-	local tun_dev="$1"
-	local zone="$2"
+# --- Firewall ---
 
-	# Create firewall zone if not exists
-	if ! uci -q get firewall.easytier >/dev/null; then
-		uci batch <<-EOF
-			set firewall.easytier=zone
-			set firewall.easytier.name='easytier'
-			set firewall.easytier.input='ACCEPT'
-			set firewall.easytier.output='ACCEPT'
-			set firewall.easytier.forward='ACCEPT'
-			set firewall.easytier.network='$tun_dev'
-			set firewall.easytier_masq=forwarding
-			set firewall.easytier_masq.src='easytier'
-			set firewall.easytier_masq.dest='$zone'
-			set firewall.easytier_lan_fwd=forwarding
-			set firewall.easytier_lan_fwd.src='$zone'
-			set firewall.easytier_lan_fwd.dest='easytier'
-		EOF
-		uci commit firewall
-	else
-		logger -t easytier "Firewall zone 'easytier' already exists, skipping"
-	fi
+setup_firewall() {
+	local cfg="$1"
+	local dev_name="$2"
+	local zone="$3"
+
+	uci -q batch <<-EOF
+		set firewall.$cfg=zone
+		set firewall.$cfg.name='$cfg'
+		set firewall.$cfg.input='ACCEPT'
+		set firewall.$cfg.output='ACCEPT'
+		set firewall.$cfg.forward='ACCEPT'
+		set firewall.$cfg.network='$dev_name'
+		set firewall.${cfg}_fwd=forwarding
+		set firewall.${cfg}_fwd.src='$cfg'
+		set firewall.${cfg}_fwd.dest='$zone'
+		set firewall.${zone}_${cfg}_fwd=forwarding
+		set firewall.${zone}_${cfg}_fwd.src='$zone'
+		set firewall.${zone}_${cfg}_fwd.dest='$cfg'
+	EOF
+	uci commit firewall
+	/etc/init.d/firewall reload
 }
 
 teardown_firewall() {
+	local cfg="$1"
+	local zone
+	config_get zone "$cfg" firewall_zone "lan"
+
 	uci -q batch <<-EOF
-		delete firewall.easytier
-		delete firewall.easytier_masq
-		delete firewall.easytier_lan_fwd
+		delete firewall.$cfg
+		delete firewall.${cfg}_fwd
+		delete firewall.${zone}_${cfg}_fwd
 	EOF
 	uci commit firewall
+	/etc/init.d/firewall reload
+}
+
+# --- DNS (dnsmasq) ---
+
+# UCI dnsmasq section name for this EasyTier instance
+_dns_section() {
+	echo "easytier_$1"
 }
 
 setup_dnsmasq() {
-	local zone="$1"
+	local cfg="$1"
+	local zone="$2"
+	local dns_sec
+	dns_sec=$(_dns_section "$cfg")
 
-	# Add dnsmasq server directive:
-	# Forward all queries for the DNS zone to the Magic DNS resolver
-	# The resolver listens at MAGIC_DNS_FAKE_IP (100.100.100.101)
-	# and intercepts DNS packets on the TUN interface.
-	if ! uci -q get dhcp.easytier >/dev/null; then
-		uci set dhcp.easytier=dnsmasq
-	fi
-	uci -q add_list dhcp.@dnsmasq[0].server="/${zone}/${MAGIC_DNS_FAKE_IP}"
+	# Strip trailing dot if present
+	zone="${zone%.}"
+
+	# Create a dedicated dnsmasq config section for this instance
+	# so teardown is clean (no need to parse list values)
+	uci set "dhcp.$dns_sec"=dnsmasq
+	uci set "dhcp.$dns_sec.server=/${zone}/${MAGIC_DNS_IP}"
 	uci commit dhcp
 	/etc/init.d/dnsmasq restart
 }
 
 teardown_dnsmasq() {
-	local zone="$1"
+	local cfg="$1"
+	local dns_sec
+	dns_sec=$(_dns_section "$cfg")
 
-	uci -q delete_list dhcp.@dnsmasq[0].server="/${zone}/${MAGIC_DNS_FAKE_IP}" 2>/dev/null
-	uci -q delete dhcp.easytier 2>/dev/null
+	uci -q delete "dhcp.$dns_sec"
 	uci commit dhcp
 	/etc/init.d/dnsmasq restart
 }
