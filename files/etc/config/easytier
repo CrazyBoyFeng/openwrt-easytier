@@ -1,170 +1,79 @@
 # EasyTier configuration for OpenWrt
-# See: https://github.com/EasyTier/EasyTier
+# Documentation: https://easytier.cn
+# Source: https://github.com/EasyTier/EasyTier
 #
 # Each 'config easytier' section defines one virtual network instance.
 # Multiple sections can be defined to join multiple networks simultaneously.
 # The section name is used as the default value for --instance-name and
-# --dev-name, and as the OpenWrt firewall zone name.
+# --dev-name (et_{section_name}), and as the OpenWrt firewall zone name.
+#
+# For parameter details, constraints, and mutual exclusions, refer to:
+# https://github.com/EasyTier/EasyTier/blob/main/easytier-core/README.md
 
 config easytier 'easytier'
-	# Enable this instance (0 = disabled, 1 = enabled).
-	option enabled '1'
+        option enabled '1'
 
-	# ===== 网络设置 (Network Settings) =====
+        # ===== 网络设置 (Network Settings) =====
 
-	# Network name. Nodes with the same network_name form a virtual LAN.
-	# This field is REQUIRED.
-	option network_name 'easytier'
+        option network_name 'easytier'
+        option network_secret ''
 
-	# Network secret for node authentication.
-	# All nodes in the same network must share the same secret.
-	option network_secret ''
+        # option ipv4 '10.144.144.1/24'
+        # option ipv6 ''
+        # option dhcp '0'
+        # option hostname ''
+        # option instance_name ''
+        # list peers 'tcp://1.2.3.4:11010'
+        # list external_node 'tcp://public.example.com:11010'
+        # list proxy_networks '192.168.1.0/24'
 
-	# Virtual IPv4 address (CIDR notation).
-	# Leave empty to auto-assign via DHCP (starts from 10.0.0.1).
-	# option ipv4 '10.144.144.1/24'
+        # ===== 监听器设置 (Listener Settings) =====
 
-	# Virtual IPv6 address (optional).
-	# option ipv6 ''
+        # list listeners 'tcp://0.0.0.0:11010'
+        # list mapped_listeners 'tcp://123.123.123.123:11010'
+        # option default_protocol ''
+        # option no_listener '0'
 
-	# Auto-assign IP via DHCP.
-	# option dhcp '0'
+        # ===== RPC 设置 (RPC Settings) =====
 
-	# Device hostname, used by Magic DNS as <hostname>.<tld_dns_zone>.
-	# Default: system hostname.
-	# option hostname ''
+        # option rpc_portal ''
+        # option rpc_portal_whitelist ''
 
-	# Instance name for identifying this VPN instance.
-	# Default: section name (recommended to leave empty).
-	# option instance_name ''
+        # ===== 加密与安全 (Encryption & Security) =====
 
-	# Initial peer node addresses to connect to.
-	# list peers 'tcp://1.2.3.4:11010'
+        # option disable_encryption '0'
+        # option encryption_algorithm ''
 
-	# Public shared node addresses for peer discovery.
-	# list external_node 'tcp://public.example.com:11010'
+        # ===== 其他设置 (Other Settings) =====
 
-	# Export local subnets to other EasyTier nodes.
-	# Supports mapping: '10.0.0.0/24->192.168.0.0/24'
-	# list proxy_networks '192.168.1.0/24'
+        # option dev_name ''
+        # option mtu ''
+        # option accept_dns '0'
+        # option tld_dns_zone 'et.net'
+        # option latency_first '0'
+        # option compression ''
+        # option proxy_forward_by_system '0'
 
-	# ===== 监听器设置 (Listener Settings) =====
+        # ===== P2P 设置 (P2P Settings) =====
 
-	# Listener URLs. Supported: tcp, udp, ws, wss, quic, faketcp.
-	# Can be port number, socket addr, or protocol://addr:port.
-	# Default: tcp://0.0.0.0:11010 udp://0.0.0.0:11010
-	# list listeners 'tcp://0.0.0.0:11010'
-	# list listeners 'udp://0.0.0.0:11010'
+        # option disable_p2p '0'
+        # option p2p_only '0'
+        # option lazy_p2p '0'
+        # option need_p2p '0'
+        # option disable_udp_hole_punching '0'
+        # option disable_tcp_hole_punching '0'
+        # option disable_sym_hole_punching '0'
 
-	# Public address mapping for listeners (behind NAT).
-	# list mapped_listeners 'tcp://123.123.123.123:11010'
+        # ===== 日志设置 (Logging Settings) =====
 
-	# Default protocol for connecting to peer nodes.
-	# Options: tcp, udp, ws, wss, quic, faketcp, ring
-	# option default_protocol ''
+        option console_log_level 'info'
+        # option file_log_level ''
+        # option file_log_dir ''
+        # option file_log_size ''
+        # option file_log_count ''
 
-	# Don't listen on any port, only connect to peers.
-	# option no_listener '0'
+        # ===== OpenWrt 集成 (OpenWrt Integration) =====
 
-	# ===== RPC 设置 (RPC Settings) =====
-
-	# RPC management portal address.
-	# Formats: '0' (random port), '12345', '0.0.0.0:12345'
-	# option rpc_portal ''
-
-	# RPC access whitelist (CIDR, comma-separated).
-	# option rpc_portal_whitelist ''
-
-	# ===== 加密与安全 (Encryption & Security) =====
-
-	# Disable encryption for peer communication.
-	# option disable_encryption '0'
-
-	# Encryption algorithm.
-	# Options: xor, aes-gcm, aes-256-gcm, chacha20
-	# Note: available options depend on build variant.
-	# option encryption_algorithm ''
-
-	# ===== 其他设置 (Other Settings) =====
-
-	# TUN device name.
-	# Default: 'et_' + section name (recommended to leave empty).
-	# option dev_name ''
-
-	# MTU for the TUN device.
-	# Default: 1380 (unencrypted), 1360 (encrypted).
-	# option mtu ''
-
-	# Enable Magic DNS.
-	# When enabled, peer hostnames resolve as <hostname>.<tld_dns_zone>.
-	# option accept_dns '0'
-
-	# TLD DNS zone for Magic DNS.
-	# Default: et.net
-	# option tld_dns_zone 'et.net'
-
-	# Use latency-priority routing (lowest latency path).
-	# option latency_first '0'
-
-	# Compression algorithm: none, zstd.
-	# option compression ''
-
-	# Forward proxy traffic via system routing table.
-	# option proxy_forward_by_system '0'
-
-	# ===== P2P 设置 (P2P Settings) =====
-
-	# Disable P2P (node still accepts P2P from need-p2p peers).
-	# option disable_p2p '0'
-
-	# Only communicate with peers that have established P2P.
-	# option p2p_only '0'
-
-	# Only establish P2P when traffic actually needs the peer.
-	# option lazy_p2p '0'
-
-	# Announce that peers should proactively establish P2P to this node.
-	# option need_p2p '0'
-
-	# Disable UDP hole punching.
-	# option disable_udp_hole_punching '0'
-
-	# Disable TCP hole punching.
-	# option disable_tcp_hole_punching '0'
-
-	# Disable symmetric NAT hole punching.
-	# option disable_sym_hole_punching '0'
-
-	# ===== 日志设置 (Logging Settings) =====
-
-	# Console log level.
-	# Options: off, error, warn, info, debug, trace
-	# Default: info
-	option console_log_level 'info'
-
-	# File log level (requires file_log_dir to be set).
-	# option file_log_level ''
-
-	# File log directory. Leave empty to disable file logging.
-	# option file_log_dir ''
-
-	# File log size in MB (default: 100).
-	# option file_log_size ''
-
-	# File log count (default: 10).
-	# option file_log_count ''
-
-	# ===== OpenWrt 集成 (OpenWrt Integration) =====
-
-	# Automatically configure firewall rules.
-	# Creates a zone named after this section and forwarding rules.
-	option auto_firewall '1'
-
-	# Firewall zone to forward traffic to/from.
-	# Default: lan
-	option firewall_zone 'lan'
-
-	# Automatically configure dnsmasq for Magic DNS.
-	# Forwards the tld_dns_zone domain to 100.100.100.101.
-	# Only effective when accept_dns is enabled.
-	option auto_dnsmasq '1'
+        option auto_firewall '1'
+        option firewall_zone 'lan'
+        option auto_dnsmasq '1'
