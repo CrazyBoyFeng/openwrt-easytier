@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    name: ${{ matrix.variant }} / ${{ matrix.slug }} / ${{ matrix.sdk }}
+    name: ${{ matrix.variant }} / ${{ matrix.target }} / ${{ matrix.sdk }}
     strategy:
       fail-fast: false
       matrix:
@@ -37,14 +37,16 @@ jobs:
           if [[ "${{ matrix.sdk }}" == 23.* ]]; then
             echo "pkg_fmt=ipk" >> "$GITHUB_OUTPUT"
             echo "sdk_ext=xz" >> "$GITHUB_OUTPUT"
+            sdk_ext="xz"
           else
             echo "pkg_fmt=apk" >> "$GITHUB_OUTPUT"
             echo "sdk_ext=zst" >> "$GITHUB_OUTPUT"
+            sdk_ext="zst"
           fi
 
           # Discover the actual SDK filename from the download index
           index_url="https://downloads.openwrt.org/releases/${{ matrix.sdk }}/targets/${{ matrix.target }}/"
-          sdk_file=$(curl -sL "$index_url" | grep -o "openwrt-sdk-${{ matrix.sdk }}-${slug}[^\"']*\.tar\.${{ steps.prep.outputs.sdk_ext }}" | head -1)
+          sdk_file=$(curl -sL "$index_url" | grep -o "openwrt-sdk-${{ matrix.sdk }}-${slug}[^\"']*\.tar\.${sdk_ext}" | head -1)
           echo "sdk_file=${sdk_file}" >> "$GITHUB_OUTPUT"
           # SDK directory name is the filename without the tar extension
           sdk_dir="${sdk_file%.tar.*}"
