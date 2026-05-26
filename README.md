@@ -39,9 +39,7 @@ uci commit easytier
 
 ## Config-Server Mode
 
-Set `config_server` to connect to a remote config server. When both local UCI options and a config server are configured, `easytier-core` first starts with the local config, then applies changes from the remote config after connecting. All UCI options are passed to `easytier-core` regardless of whether `config_server` is set.
-
-However, **network interface and firewall are NOT auto-configured** when `config_server` is set — similar to how [ZeroTier](https://openwrt.org/docs/guide-user/services/vpn/zerotier) and [Tailscale](https://openwrt.org/docs/guide-user/services/vpn/tailscale) work on OpenWrt. Users must manually configure `/etc/config/network` and `/etc/config/firewall`.
+Set `config_server` to connect to a remote config server. When `config_server` is set, **network interface and firewall are NOT auto-configured** — similar to how [ZeroTier](https://openwrt.org/docs/guide-user/services/vpn/zerotier) and [Tailscale](https://openwrt.org/docs/guide-user/services/vpn/tailscale) work on OpenWrt. Users must manually configure `/etc/config/network` and `/etc/config/firewall`.
 
 ```uci
 config easytier 'easytier'
