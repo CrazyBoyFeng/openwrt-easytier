@@ -1,0 +1,105 @@
+name: Build Packages
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.variant }} / ${{ matrix.slug }} / ${{ matrix.sdk }}
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - x86/64
+          - arms64/armv8
+          - mediatek/filogic
+        sdk:
+          - '23.05.6'    # ipk
+          - '24.10.0'    # apk
+        variant:
+          - lite
+          - full
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare environment variables
+        id: prep
+        run: |
+          slug=$(echo "${{ matrix.target }}" | tr '/' '-')
+          echo "slug=${slug}" >> "$GITHUB_OUTPUT"
+          echo "sdk_dir=openwrt-sdk-${slug}-${{ matrix.sdk }}_linux-x86_64" >> "$GITHUB_OUTPUT"
+          if [[ "${{ matrix.sdk }}" == 23.* ]]; then
+            echo "pkg_fmt=ipk" >> "$GITHUB_OUTPUT"
+          else
+            echo "pkg_fmt=apk" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download and extract SDK
+        run: |
+          if [ ! -d "${{ steps.prep.outputs.sdk_dir }}" ]; then
+            echo "::group::Downloading SDK"
+            curl -L \
+              "https://downloads.openwrt.org/releases/${{ matrix.sdk }}/targets/${{ matrix.target }}/openwrt-sdk-${{ steps.prep.outputs.slug }}-${{ matrix.sdk }}_linux-x86_64.tar.xz" \
+              | tar xJ
+            echo "::endgroup::"
+          fi
+
+      - name: Cache toolchain and downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ steps.prep.outputs.sdk_dir }}/dl
+            ${{ steps.prep.outputs.sdk_dir }}/staging_dir
+          key: >-
+            build-${{ matrix.sdk }}-${{ steps.prep.outputs.slug }}-${{ hashFiles('Makefile', 'patches/**') }}
+          restore-keys: |
+            build-${{ matrix.sdk }}-${{ steps.prep.outputs.slug }}-
+
+      - name: Update feeds and install Rust
+        working-directory: ${{ steps.prep.outputs.sdk_dir }}
+        run: |
+          ./scripts/feeds update -a
+          ./scripts/feeds install rust
+
+      - name: Copy package into SDK
+        run: |
+          cp -r Makefile patches files "${{ steps.prep.outputs.sdk_dir }}/package/easytier"
+
+      - name: Build package
+        working-directory: ${{ steps.prep.outputs.sdk_dir }}
+        run: |
+          pkg=$( [ "${{ matrix.variant }}" = "lite" ] && echo "easytier-lite" || echo "easytier" )
+          make "package/${pkg}/compile" V=s || make "package/${pkg}/compile" V=s
+
+      - name: Upload package artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: >-
+            easytier-${{ matrix.variant }}-${{ steps.prep.outputs.slug }}-${{ steps.prep.outputs.pkg_fmt }}
+          path: >-
+            ${{ steps.prep.outputs.sdk_dir }}/bin/packages/**/*.${{ steps.prep.outputs.pkg_fmt }}
+          if-no-files-found: warn
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-artifacts/**
+          generate_release_notes: true
