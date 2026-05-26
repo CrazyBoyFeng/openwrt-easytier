@@ -1,0 +1,23 @@
+# Binaries
+*.o
+*.so
+*.a
+easytier-core
+easytier-cli
+
+# Build artifacts
+*.ipk
+*.pkg
+workdir/
+staging_dir/
+target/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

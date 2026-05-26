@@ -1,0 +1,166 @@
+# EasyTier configuration for OpenWrt
+# See: https://github.com/EasyTier/EasyTier
+
+config easytier 'main'
+	# Network name. Nodes with the same network_name form a virtual LAN.
+	# This field is REQUIRED.
+	option network_name 'easytier'
+
+	# Network secret for node authentication.
+	# All nodes in the same network must share the same secret.
+	option network_secret ''
+
+	# Virtual IPv4 address for this node (CIDR notation).
+	# Leave empty to auto-assign via DHCP (starts from 10.0.0.1).
+	# option ipv4 '10.144.144.1/24'
+
+	# Virtual IPv6 address for this node (optional).
+	# option ipv6 ''
+
+	# Device hostname, used by Magic DNS to resolve as <hostname>.et.net.
+	# Default: system hostname.
+	# option hostname ''
+
+	# Instance name, used to identify this VPN node on the same machine.
+	# option instance_name ''
+
+	# Listener URLs (protocols the node listens on).
+	# Supported: tcp, udp, ws, wss, quic, faketcp, wg (full build only)
+	# Can be port number, socket addr, or protocol://addr:port.
+	# Default: tcp://0.0.0.0:11010 udp://0.0.0.0:11010
+	# list listeners 'tcp://0.0.0.0:11010'
+	# list listeners 'udp://0.0.0.0:11010'
+	# list listeners 'ws://0.0.0.0:11011'
+
+	# Peer node addresses to connect to (comma-separated).
+	# list peers 'tcp://1.2.3.4:11010'
+	# list peers 'udp://1.2.3.4:11010'
+
+	# External node (public server) address for peer discovery.
+	# option external_node 'tcp://public.example.com:11010'
+
+	# Export local subnets to other EasyTier nodes.
+	# Supports mapping: '10.0.0.0/24->192.168.0.0/24'
+	# list proxy_networks '192.168.1.0/24'
+
+	# Mapped listeners (public addresses for other nodes to connect).
+	# list mapped_listeners 'tcp://123.123.123.123:11010'
+
+	# Default protocol for connecting to peer nodes.
+	# Options: tcp, udp, ws, wss, quic, faketcp, wg, ring
+	# option default_protocol 'tcp'
+
+	# Don't listen on any port, only connect to peers.
+	# option no_listener '0'
+
+config advanced 'advanced'
+	# Encryption algorithm.
+	# Options: aes-gcm (default), aes-256-gcm, xor
+	# Note: available options depend on build variant.
+	# option encryption_algorithm 'aes-gcm'
+
+	# Disable encryption for peer communication.
+	# option disable_encryption '0'
+
+	# Console log level.
+	# Options: off, error, warn, info, debug, trace
+	# Default: info
+	# option console_log_level 'info'
+
+	# File log level (set file_log_dir to enable file logging).
+	# option file_log_level ''
+
+	# File log directory. Leave empty to disable file logging.
+	# option file_log_dir ''
+
+	# File log size in MB (default: 100).
+	# option file_log_size '100'
+
+	# File log count (default: 10).
+	# option file_log_count '10'
+
+	# Enable Magic DNS.
+	# When enabled, peer hostnames resolve as <hostname>.<tld_dns_zone>.
+	# option accept_dns '0'
+
+	# TLD DNS zone for Magic DNS (default: et.net.).
+	# option tld_dns_zone 'et.net.'
+
+	# MTU for the TUN device.
+	# Default: 1380 (unencrypted), 1360 (encrypted).
+	# option mtu ''
+
+	# TUN device name.
+	# option dev_name ''
+
+	# Use multi-threaded runtime (default: true).
+	# option multi_thread '1'
+
+	# Multi-thread count (default: 2, must be > 2).
+	# option multi_thread_count '2'
+
+	# Latency priority mode (use lowest latency path).
+	# option latency_first '0'
+
+	# Compression algorithm: none, zstd.
+	# option compression ''
+
+	# Enable KCP proxy for TCP streams (improves latency on lossy networks).
+	# option enable_kcp_proxy '0'
+
+	# Enable QUIC proxy for TCP streams.
+	# option enable_quic_proxy '0'
+
+	# Enable UDP broadcast relay.
+	# option enable_udp_broadcast_relay '0'
+
+config p2p 'p2p'
+	# Disable P2P (node still accepts P2P from need-p2p peers).
+	# option disable_p2p '0'
+
+	# Only communicate with peers that have established P2P.
+	# option p2p_only '0'
+
+	# Only establish P2P when traffic actually needs the peer.
+	# option lazy_p2p '0'
+
+	# Announce that peers should proactively establish P2P to this node.
+	# option need_p2p '0'
+
+	# Disable UDP hole punching.
+	# option disable_udp_hole_punching '0'
+
+	# Disable TCP hole punching.
+	# option disable_tcp_hole_punching '0'
+
+	# Disable symmetric NAT hole punching.
+	# option disable_sym_hole_punching '0'
+
+config rpc 'rpc'
+	# RPC portal address for management.
+	# Default: 0 (random port, first tries 15888).
+	# option rpc_portal ''
+
+	# RPC portal whitelist (CIDR, comma-separated).
+	# option rpc_portal_whitelist ''
+
+config network 'network'
+	# OpenWrt interface name for the EasyTier TUN device.
+	# This is NOT the TUN device name (--dev-name), but the OpenWrt
+	# network interface name registered with netifd.
+	option iface_name 'et0'
+
+	# Whether to configure firewall rules automatically.
+	# Creates an 'easytier' zone and forwarding rules.
+	# Option: '0' disabled, '1' enabled (default)
+	option auto_firewall '1'
+
+	# Firewall zone to attach the EasyTier interface to.
+	# Default: lan (allows LAN devices to access EasyTier network)
+	option firewall_zone 'lan'
+
+	# Whether to configure dnsmasq forwarding for Magic DNS.
+	# Adds: server=/et.net/100.100.100.101 to dnsmasq config.
+	# Only effective when accept_dns is enabled.
+	# Option: '0' disabled, '1' enabled (default)
+	option auto_dnsmasq '1'

@@ -1,0 +1,2 @@
+OpenWrt Build System patches for EasyTier.
+Applied in order via `patch -p1 < patches/NNN-description.patch`.
