@@ -33,20 +33,38 @@ jobs:
         run: |
           slug=$(echo "${{ matrix.target }}" | tr '/' '-')
           echo "slug=${slug}" >> "$GITHUB_OUTPUT"
-          echo "sdk_dir=openwrt-sdk-${slug}-${{ matrix.sdk }}_linux-x86_64" >> "$GITHUB_OUTPUT"
+
           if [[ "${{ matrix.sdk }}" == 23.* ]]; then
             echo "pkg_fmt=ipk" >> "$GITHUB_OUTPUT"
+            echo "sdk_ext=xz" >> "$GITHUB_OUTPUT"
           else
             echo "pkg_fmt=apk" >> "$GITHUB_OUTPUT"
+            echo "sdk_ext=zst" >> "$GITHUB_OUTPUT"
           fi
+
+          # Discover the actual SDK filename from the download index
+          index_url="https://downloads.openwrt.org/releases/${{ matrix.sdk }}/targets/${{ matrix.target }}/"
+          sdk_file=$(curl -sL "$index_url" | grep -o "openwrt-sdk-${{ matrix.sdk }}-${slug}[^\"']*\.tar\.${{ steps.prep.outputs.sdk_ext }}" | head -1)
+          echo "sdk_file=${sdk_file}" >> "$GITHUB_OUTPUT"
+          # SDK directory name is the filename without the tar extension
+          sdk_dir="${sdk_file%.tar.*}"
+          echo "sdk_dir=${sdk_dir}" >> "$GITHUB_OUTPUT"
 
       - name: Download and extract SDK
         run: |
           if [ ! -d "${{ steps.prep.outputs.sdk_dir }}" ]; then
             echo "::group::Downloading SDK"
             curl -L \
-              "https://downloads.openwrt.org/releases/${{ matrix.sdk }}/targets/${{ matrix.target }}/openwrt-sdk-${{ steps.prep.outputs.slug }}-${{ matrix.sdk }}_linux-x86_64.tar.xz" \
-              | tar xJ
+              "https://downloads.openwrt.org/releases/${{ matrix.sdk }}/targets/${{ matrix.target }}/${{ steps.prep.outputs.sdk_file }}" \
+              -o sdk.tar.${{ steps.prep.outputs.sdk_ext }}
+            echo "::endgroup::"
+            echo "::group::Extracting SDK"
+            if [ "${{ steps.prep.outputs.sdk_ext }}" = "zst" ]; then
+              tar --zstd -xf sdk.tar.${{ steps.prep.outputs.sdk_ext }}
+            else
+              tar xJf sdk.tar.${{ steps.prep.outputs.sdk_ext }}
+            fi
+            rm sdk.tar.${{ steps.prep.outputs.sdk_ext }}
             echo "::endgroup::"
           fi
 
