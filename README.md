@@ -39,7 +39,9 @@ uci commit easytier
 
 ## Config-Server Mode
 
-Set `config_server` to connect to a remote config server. In this mode, all network parameters (peers, encryption, routes, etc.) are managed remotely by the server. The init script only passes `--config-server` to `easytier-core` — **network interface and firewall are NOT auto-configured**, similar to how [ZeroTier](https://openwrt.org/docs/guide-user/services/vpn/zerotier) and [Tailscale](https://openwrt.org/docs/guide-user/services/vpn/tailscale) work on OpenWrt. Users must manually configure `/etc/config/network` and `/etc/config/firewall`.
+Set `config_server` to connect to a remote config server. When both local UCI options and a config server are configured, `easytier-core` first starts with the local config, then applies changes from the remote config after connecting. All UCI options are passed to `easytier-core` regardless of whether `config_server` is set.
+
+However, **network interface and firewall are NOT auto-configured** when `config_server` is set — similar to how [ZeroTier](https://openwrt.org/docs/guide-user/services/vpn/zerotier) and [Tailscale](https://openwrt.org/docs/guide-user/services/vpn/tailscale) work on OpenWrt. Users must manually configure `/etc/config/network` and `/etc/config/firewall`.
 
 ```uci
 config easytier 'easytier'
@@ -104,8 +106,6 @@ Options are ordered following the [official documentation](https://easytier.cn/g
 
 | Option | Type | Default | CLI Equivalent | Description |
 |--------|------|---------|---------------|-------------|
-| `hostname` | string | (system) | `--hostname` | Device hostname |
-| `instance_name` | string | (section) | `--instance-name` | Instance name |
 | `vpn_portal` | string | (empty) | `--vpn-portal` | VPN portal URL, e.g. `wg://0.0.0.0:11010/10.14.14.0/24` |
 | `disable_encryption` | bool | `0` | `--disable-encryption` | Disable encryption |
 | `encryption_algorithm` | string | (aes-gcm) | `--encryption-algorithm` | `xor`, `chacha20`, `aes-gcm`, `aes-256-gcm`, etc. |
@@ -160,9 +160,9 @@ Options are ordered following the [official documentation](https://easytier.cn/g
 | `file_log_size` | uint | `100` | `--file-log-size` | Per-file log size (MB) |
 | `file_log_count` | uint | `10` | `--file-log-count` | Max log file count |
 
-### OpenWrt Integration (CLI mode only)
+### OpenWrt Integration (not effective in config-server mode)
 
-These options are only effective in CLI mode (when `config_server` is not set).
+These options are only effective when `config_server` is not set.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
@@ -177,8 +177,8 @@ The procd init script automatically handles:
 1. **IP forwarding** - Enable `net.ipv4.ip_forward` on start
 2. **Process management** - Start/stop/restart `easytier-core` via procd, auto-respawn
 3. **TUN device** - Wait for TUN device, bring it up
-4. **Firewall** - Create zone with `masq`/`mtu_fix`, bidirectional forwarding (CLI mode only)
-5. **DNS (Magic DNS)** - Add dnsmasq forwarding rule for `tld_dns_zone` (CLI mode only)
+4. **Firewall** - Create zone with `masq`/`mtu_fix`, bidirectional forwarding (not in config-server mode)
+5. **DNS (Magic DNS)** - Add dnsmasq forwarding rule for `tld_dns_zone` (not in config-server mode)
 6. **Cleanup** - Remove firewall rules and dnsmasq config on stop
 7. **Hot reload** - UCI changes trigger automatic restart via `procd_add_reload_trigger`
 
