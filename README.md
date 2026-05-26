@@ -71,6 +71,7 @@ Options are ordered following the [official documentation](https://easytier.cn/g
 | `machine_id` | string | (auto) | `--machine-id` | Machine ID for config server identification (auto-detected if empty) |
 | `config_file` | string | (empty) | `--config-file` | TOML config file path (CLI options override file options) |
 | `config_dir` | string | (empty) | `--config-dir` | Load all `.toml` files from a directory; also persists config-server settings |
+| `disable_env_parsing` | bool | `0` | `--disable-env-parsing` | Disable environment variable parsing in config files |
 
 ### Network Settings
 
@@ -85,6 +86,9 @@ Options are ordered following the [official documentation](https://easytier.cn/g
 | `credential_file` | string | (empty) | `--credential-file` | Credential persistence file path |
 | `ipv4` | string | (empty) | `--ipv4` | Virtual IPv4 address (CIDR) |
 | `ipv6` | string | (empty) | `--ipv6` | Virtual IPv6 address |
+| `ipv6_public_addr_provider` | bool | `0` | `--ipv6-public-addr-provider` | Share public IPv6 subnet with peers (Linux only) |
+| `ipv6_public_addr_auto` | bool | `0` | `--ipv6-public-addr-auto` | Auto-obtain public IPv6 address from a peer |
+| `ipv6_public_addr_prefix` | string | (empty) | `--ipv6-public-addr-prefix` | Manually specify IPv6 public subnet to share (CIDR) |
 | `dhcp` | bool | `0` | `--dhcp` | Auto-assign IP via DHCP |
 | `hostname` | string | (system) | `--hostname` | Device hostname for Magic DNS |
 | `instance_name` | string | (section) | `--instance-name` | Instance name |
@@ -135,6 +139,8 @@ Options are ordered following the [official documentation](https://easytier.cn/g
 | `disable_tcp_hole_punching` | bool | `0` | `--disable-tcp-hole-punching` | Disable TCP hole punching |
 | `disable_udp_hole_punching` | bool | `0` | `--disable-udp-hole-punching` | Disable UDP hole punching |
 | `disable_sym_hole_punching` | bool | `0` | `--disable-sym-hole-punching` | Disable symmetric NAT hole punching |
+| `disable_upnp` | bool | `0` | `--disable-upnp` | Disable UPnP/NAT-PMP automatic port mapping |
+| `enable_udp_broadcast_relay` | bool | `0` | `--enable-udp-broadcast-relay` | Enable UDP broadcast relay (Windows only) |
 | `relay_all_peer_rpc` | bool | `0` | `--relay-all-peer-rpc` | Relay all peer RPC packets |
 | `socks5` | string | (empty) | `--socks5` | SOCKS5 proxy port, e.g. `1080` |
 | `compression` | string | (none) | `--compression` | `none` or `zstd` |
@@ -143,16 +149,18 @@ Options are ordered following the [official documentation](https://easytier.cn/g
 | `disable_kcp_input` | bool | `0` | `--disable-kcp-input` | Disallow KCP proxy input from other nodes |
 | `enable_quic_proxy` | bool | `0` | `--enable-quic-proxy` | Use QUIC proxy for TCP streams |
 | `disable_quic_input` | bool | `0` | `--disable-quic-input` | Disallow QUIC proxy input from other nodes |
-| `quic_listen_port` | uint | (0) | `--quic-listen-port` | QUIC listener port (0 = random) |
 | `port_forward` | list | - | `--port-forward` | Port forwarding rules, e.g. `udp://0.0.0.0:12345/10.126.126.1:23456` |
 | `accept_dns` | bool | `0` | `--accept-dns` | Enable Magic DNS |
 | `tld_dns_zone` | string | `et.net` | `--tld-dns-zone` | TLD DNS zone for Magic DNS |
 | `private_mode` | bool | `0` | `--private-mode` | Only relay same-network traffic |
-| `foreign_relay_bps_limit` | string | (empty) | `--foreign-relay-bps-limit` | Limit relay bandwidth |
+| `foreign_relay_bps_limit` | string | (empty) | `--foreign-relay-bps-limit` | Limit foreign network relay bandwidth (BPS) |
+| `instance_recv_bps_limit` | string | (empty) | `--instance-recv-bps-limit` | Limit instance receive bandwidth (BPS) |
 | `tcp_whitelist` | string | (empty) | `--tcp-whitelist` | TCP port whitelist (supports ranges: `80`, `8000-9000`) |
 | `udp_whitelist` | string | (empty) | `--udp-whitelist` | UDP port whitelist (supports ranges) |
 | `disable_relay_kcp` | bool | `0` | `--disable-relay-kcp` | Disallow forwarding KCP packets |
 | `enable_relay_foreign_network_kcp` | bool | `0` | `--enable-relay-foreign-network-kcp` | Allow relaying foreign network KCP |
+| `disable_relay_quic` | bool | `0` | `--disable-relay-quic` | Disallow forwarding QUIC packets |
+| `enable_relay_foreign_network_quic` | bool | `0` | `--enable-relay-foreign-network-quic` | Allow relaying foreign network QUIC |
 | `stun_servers` | list | - | `--stun-servers` | Override default STUN server list |
 | `stun_servers_v6` | list | - | `--stun-servers-v6` | Override default IPv6 STUN server list |
 

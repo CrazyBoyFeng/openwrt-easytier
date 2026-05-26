@@ -19,6 +19,7 @@ validate_easytier_section() {
                 'machine_id:string' \
                 'config_file:string' \
                 'config_dir:string' \
+                'disable_env_parsing:bool:0' \
                 'network_name:string:easytier' \
                 'network_secret:string' \
                 'secure_mode:bool:0' \
@@ -28,6 +29,9 @@ validate_easytier_section() {
                 'credential_file:string' \
                 'ipv4:string' \
                 'ipv6:string' \
+                'ipv6_public_addr_provider:bool:0' \
+                'ipv6_public_addr_auto:bool:0' \
+                'ipv6_public_addr_prefix:string' \
                 'dhcp:bool:0' \
                 'peers:list(string)' \
                 'external_node:list(string)' \
@@ -63,6 +67,8 @@ validate_easytier_section() {
                 'disable_tcp_hole_punching:bool:0' \
                 'disable_udp_hole_punching:bool:0' \
                 'disable_sym_hole_punching:bool:0' \
+                'disable_upnp:bool:0' \
+                'enable_udp_broadcast_relay:bool:0' \
                 'relay_all_peer_rpc:bool:0' \
                 'socks5:string' \
                 'compression:string' \
@@ -71,16 +77,18 @@ validate_easytier_section() {
                 'disable_kcp_input:bool:0' \
                 'enable_quic_proxy:bool:0' \
                 'disable_quic_input:bool:0' \
-                'quic_listen_port:uinteger' \
                 'port_forward:list(string)' \
                 'accept_dns:bool:0' \
                 'tld_dns_zone:string:et.net' \
                 'private_mode:bool:0' \
                 'foreign_relay_bps_limit:string' \
+                'instance_recv_bps_limit:string' \
                 'tcp_whitelist:string' \
                 'udp_whitelist:string' \
                 'disable_relay_kcp:bool:0' \
                 'enable_relay_foreign_network_kcp:bool:0' \
+                'disable_relay_quic:bool:0' \
+                'enable_relay_foreign_network_quic:bool:0' \
                 'stun_servers:list(string)' \
                 'stun_servers_v6:list(string)' \
                 'console_log_level:string:info' \
@@ -108,6 +116,7 @@ start_instance() {
         [ -n "$machine_id" ] && procd_append_param command --machine-id "$machine_id"
         [ -n "$config_file" ] && procd_append_param command --config-file "$config_file"
         [ -n "$config_dir" ] && procd_append_param command --config-dir "$config_dir"
+        [ "$disable_env_parsing" = "1" ] && procd_append_param command --disable-env-parsing
 
         # ===== 网络设置 (Network Settings) =====
         [ -n "$network_name" ] && procd_append_param command --network-name "$network_name"
@@ -119,6 +128,9 @@ start_instance() {
         [ -n "$credential_file" ] && procd_append_param command --credential-file "$credential_file"
         [ -n "$ipv4" ] && procd_append_param command --ipv4 "$ipv4"
         [ -n "$ipv6" ] && procd_append_param command --ipv6 "$ipv6"
+        [ "$ipv6_public_addr_provider" = "1" ] && procd_append_param command --ipv6-public-addr-provider
+        [ "$ipv6_public_addr_auto" = "1" ] && procd_append_param command --ipv6-public-addr-auto
+        [ -n "$ipv6_public_addr_prefix" ] && procd_append_param command --ipv6-public-addr-prefix "$ipv6_public_addr_prefix"
         [ "$dhcp" = "1" ] && procd_append_param command --dhcp
         for p in $peers; do
                 procd_append_param command --peers "$p"
@@ -184,6 +196,8 @@ start_instance() {
         [ "$disable_tcp_hole_punching" = "1" ] && procd_append_param command --disable-tcp-hole-punching
         [ "$disable_udp_hole_punching" = "1" ] && procd_append_param command --disable-udp-hole-punching
         [ "$disable_sym_hole_punching" = "1" ] && procd_append_param command --disable-sym-hole-punching
+        [ "$disable_upnp" = "1" ] && procd_append_param command --disable-upnp
+        [ "$enable_udp_broadcast_relay" = "1" ] && procd_append_param command --enable-udp-broadcast-relay
         [ "$relay_all_peer_rpc" = "1" ] && procd_append_param command --relay-all-peer-rpc
         [ -n "$socks5" ] && procd_append_param command --socks5 "$socks5"
         [ -n "$compression" ] && procd_append_param command --compression "$compression"
@@ -192,7 +206,6 @@ start_instance() {
         [ "$disable_kcp_input" = "1" ] && procd_append_param command --disable-kcp-input
         [ "$enable_quic_proxy" = "1" ] && procd_append_param command --enable-quic-proxy
         [ "$disable_quic_input" = "1" ] && procd_append_param command --disable-quic-input
-        [ -n "$quic_listen_port" ] && procd_append_param command --quic-listen-port "$quic_listen_port"
         for pf in $port_forward; do
                 procd_append_param command --port-forward "$pf"
         done
@@ -200,10 +213,13 @@ start_instance() {
         [ "$accept_dns" = "1" ] && procd_append_param command --tld-dns-zone "$tld_dns_zone"
         [ "$private_mode" = "1" ] && procd_append_param command --private-mode
         [ -n "$foreign_relay_bps_limit" ] && procd_append_param command --foreign-relay-bps-limit "$foreign_relay_bps_limit"
+        [ -n "$instance_recv_bps_limit" ] && procd_append_param command --instance-recv-bps-limit "$instance_recv_bps_limit"
         [ -n "$tcp_whitelist" ] && procd_append_param command --tcp-whitelist "$tcp_whitelist"
         [ -n "$udp_whitelist" ] && procd_append_param command --udp-whitelist "$udp_whitelist"
         [ "$disable_relay_kcp" = "1" ] && procd_append_param command --disable-relay-kcp
         [ "$enable_relay_foreign_network_kcp" = "1" ] && procd_append_param command --enable-relay-foreign-network-kcp
+        [ "$disable_relay_quic" = "1" ] && procd_append_param command --disable-relay-quic
+        [ "$enable_relay_foreign_network_quic" = "1" ] && procd_append_param command --enable-relay-foreign-network-quic
         for ss in $stun_servers; do
                 procd_append_param command --stun-servers "$ss"
         done
