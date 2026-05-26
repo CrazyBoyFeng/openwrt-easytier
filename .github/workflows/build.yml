@@ -14,7 +14,6 @@ jobs:
       matrix:
         target:
           - x86/64
-          - arms64/armv8
           - mediatek/filogic
           - ramips/mt7621
         sdk:
