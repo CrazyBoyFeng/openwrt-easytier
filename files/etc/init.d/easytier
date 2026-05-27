@@ -350,6 +350,7 @@ setup_firewall() {
                 set firewall.$cfg.output='ACCEPT'
                 set firewall.$cfg.forward='ACCEPT'
                 set firewall.$cfg.network='$dev_name'
+                set firewall.$cfg.mtu_fix='1'
                 set firewall.${cfg}_fwd=forwarding
                 set firewall.${cfg}_fwd.src='$cfg'
                 set firewall.${cfg}_fwd.dest='$zone'
