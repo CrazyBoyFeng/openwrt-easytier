@@ -8,17 +8,20 @@ on:
 
 jobs:
   build:
-    name: ${{ matrix.target }} / ${{ matrix.sdk }}
+    name: ${{ matrix.target }}
     strategy:
       fail-fast: false
       matrix:
-        target:
-          - x86/64
-          - mediatek/filogic
-          - ramips/mt7621
-        sdk:
-          - '23.05.6'    # ipk
-          - '24.10.0'    # apk
+        include:
+          - target: 'x86/64'
+            slug: 'x86-64'
+            cargo_target: 'x86_64-unknown-linux-gnu'
+          - target: 'mediatek/filogic'
+            slug: 'mediatek-filogic'
+            cargo_target: 'aarch64-unknown-linux-gnu'
+          - target: 'ramips/mt7621'
+            slug: 'ramips-mt7621'
+            cargo_target: 'mipsel-unknown-linux-gnu'
     runs-on: ubuntu-latest
     timeout-minutes: 360
     env:
@@ -30,105 +33,99 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Prepare environment variables
-        id: prep
+      - name: Install Rust via rustup
         run: |
-          slug=$(echo "${{ matrix.target }}" | tr '/' '-')
-          echo "slug=${slug}" >> "$GITHUB_OUTPUT"
-
-          if [[ "${{ matrix.sdk }}" == 23.* ]]; then
-            echo "pkg_fmt=ipk" >> "$GITHUB_OUTPUT"
-            echo "sdk_ext=xz" >> "$GITHUB_OUTPUT"
-            sdk_ext="xz"
-          else
-            echo "pkg_fmt=apk" >> "$GITHUB_OUTPUT"
-            echo "sdk_ext=zst" >> "$GITHUB_OUTPUT"
-            sdk_ext="zst"
-          fi
-
-          # Discover the actual SDK filename from the download index
-          index_url="https://downloads.openwrt.org/releases/${{ matrix.sdk }}/targets/${{ matrix.target }}/"
-          sdk_file=$(curl -sL "$index_url" | grep -o "openwrt-sdk-${{ matrix.sdk }}-${slug}[^\"']*\.tar\.${sdk_ext}" | head -1)
-          echo "sdk_file=${sdk_file}" >> "$GITHUB_OUTPUT"
-          # SDK directory name is the filename without the tar extension
-          sdk_dir="${sdk_file%.tar.*}"
-          echo "sdk_dir=${sdk_dir}" >> "$GITHUB_OUTPUT"
-
-      - name: Download and extract SDK
-        run: |
-          if [ ! -d "${{ steps.prep.outputs.sdk_dir }}" ]; then
-            echo "::group::Downloading SDK"
-            curl -L \
-              "https://downloads.openwrt.org/releases/${{ matrix.sdk }}/targets/${{ matrix.target }}/${{ steps.prep.outputs.sdk_file }}" \
-              -o sdk.tar.${{ steps.prep.outputs.sdk_ext }}
-            echo "::endgroup::"
-            echo "::group::Extracting SDK"
-            if [ "${{ steps.prep.outputs.sdk_ext }}" = "zst" ]; then
-              tar --zstd -xf sdk.tar.${{ steps.prep.outputs.sdk_ext }}
-            else
-              tar xJf sdk.tar.${{ steps.prep.outputs.sdk_ext }}
-            fi
-            rm sdk.tar.${{ steps.prep.outputs.sdk_ext }}
-            echo "::endgroup::"
-          fi
+          rustup default stable
+          rustup target add ${{ matrix.cargo_target }}
 
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.7
 
-      - name: Cache toolchain and downloads
-        uses: actions/cache@v4
-        with:
-          path: |
-            ${{ steps.prep.outputs.sdk_dir }}/dl
-            ${{ steps.prep.outputs.sdk_dir }}/staging_dir
-          key: >-
-            build-${{ matrix.sdk }}-${{ steps.prep.outputs.slug }}-${{ hashFiles('Makefile', 'patches/**') }}
-          restore-keys: |
-            build-${{ matrix.sdk }}-${{ steps.prep.outputs.slug }}-
-
-      - name: Update feeds and install Rust
-        working-directory: ${{ steps.prep.outputs.sdk_dir }}
+      - name: Build packages
+        timeout-minutes: 330
         run: |
-          ./scripts/feeds update -a
-          ./scripts/feeds install rust
+          SLUG="${{ matrix.slug }}"
+          CARGO_TARGET="${{ matrix.cargo_target }}"
+          WORKSPACE="$GITHUB_WORKSPACE"
 
-      - name: Copy package into SDK
-        run: |
-          mkdir -p "${{ steps.prep.outputs.sdk_dir }}/package/easytier"
-          cp -r Makefile patches files "${{ steps.prep.outputs.sdk_dir }}/package/easytier/"
+          build_sdk() {
+            local SDK_VER="$1"
+            local PKG_FMT="$2"
+            local TAR_EXT="$3"
 
-      - name: Select packages
-        working-directory: ${{ steps.prep.outputs.sdk_dir }}
-        run: |
-          cat >> .config << 'EOF'
-          CONFIG_PACKAGE_easytier=y
-          CONFIG_PACKAGE_easytier-lite=y
-          EOF
-          make defconfig
+            echo "=== Downloading $SDK_VER SDK ($PKG_FMT) ==="
+            local INDEX="https://downloads.openwrt.org/releases/$SDK_VER/targets/${{ matrix.target }}/"
+            local FILE
+            FILE=$(curl -sL "$INDEX" | grep -o "openwrt-sdk-$SDK_VER-${SLUG}[^\"']*\.tar\.${TAR_EXT}" | head -1)
+            if [ -z "$FILE" ]; then
+              echo "ERROR: SDK file not found for $SDK_VER"
+              return 1
+            fi
+            local DIR="${FILE%.tar.*}"
 
-      - name: Build full variant
-        working-directory: ${{ steps.prep.outputs.sdk_dir }}
-        timeout-minutes: 300
-        run: |
-          make "package/easytier/compile" V=s || make "package/easytier/compile" V=s
+            curl -L "${INDEX}${FILE}" -o "sdk.tar.${TAR_EXT}"
+            if [ "$TAR_EXT" = "zst" ]; then
+              tar --zstd -xf "sdk.tar.${TAR_EXT}"
+            else
+              tar xJf "sdk.tar.${TAR_EXT}"
+            fi
+            rm "sdk.tar.${TAR_EXT}"
 
-      - name: Build lite variant
-        working-directory: ${{ steps.prep.outputs.sdk_dir }}
-        timeout-minutes: 300
-        run: |
-          make "package/easytier-lite/compile" V=s || make "package/easytier-lite/compile" V=s
+            cd "$DIR"
+
+            echo "=== Configuring $SDK_VER build ==="
+            ./scripts/feeds update -a
+
+            # Copy package source
+            mkdir -p package/easytier
+            cp -r "$WORKSPACE/Makefile" "$WORKSPACE/patches" "$WORKSPACE/files" package/easytier/
+
+            # Remove rust/host build dependency — CI uses rustup instead
+            sed -i '/^PKG_BUILD_DEPENDS:=rust\/host$/d' package/easytier/Makefile
+
+            # Configure cargo cross-compiler linker (non-native targets only)
+            if [ "$CARGO_TARGET" != "x86_64-unknown-linux-gnu" ]; then
+              local LINKER
+              LINKER=$(find staging_dir/toolchain* -name '*-gcc' -type f | head -1)
+              if [ -n "$LINKER" ]; then
+                mkdir -p "$HOME/.cargo"
+                printf '[target.%s]\nlinker = "%s"\n' "$CARGO_TARGET" "$LINKER" > "$HOME/.cargo/config.toml"
+                echo "Cargo linker: $LINKER"
+              fi
+            fi
+
+            # Select packages
+            printf 'CONFIG_PACKAGE_easytier=y\nCONFIG_PACKAGE_easytier-lite=y\n' >> .config
+            make defconfig
+
+            echo "=== Building full variant ($PKG_FMT) ==="
+            make package/easytier/compile V=s || make package/easytier/compile V=s
+
+            echo "=== Building lite variant ($PKG_FMT) ==="
+            make package/easytier-lite/compile V=s || make package/easytier-lite/compile V=s
+
+            # Collect artifacts
+            mkdir -p "$WORKSPACE/output/$PKG_FMT"
+            find bin/packages -name "*.${PKG_FMT}" -exec cp {} "$WORKSPACE/output/$PKG_FMT/" \;
+
+            cd ..
+            rm -rf "$DIR"
+            echo "=== $SDK_VER ($PKG_FMT) done ==="
+          }
+
+          # Build ipk first, then apk — sccache accelerates the second build
+          build_sdk "23.05.6" "ipk" "xz"
+          build_sdk "24.10.6" "apk" "zst"
 
       - name: sccache stats
         if: always()
         run: sccache --show-stats
 
-      - name: Upload package artifacts
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: >-
-            easytier-${{ steps.prep.outputs.slug }}-${{ steps.prep.outputs.pkg_fmt }}
-          path: >-
-            ${{ steps.prep.outputs.sdk_dir }}/bin/packages/**/*.${{ steps.prep.outputs.pkg_fmt }}
+          name: easytier-${{ matrix.slug }}
+          path: output/
           if-no-files-found: warn
 
   release:
