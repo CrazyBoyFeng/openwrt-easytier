@@ -97,6 +97,15 @@ jobs:
           mkdir -p "${{ steps.prep.outputs.sdk_dir }}/package/easytier"
           cp -r Makefile patches files "${{ steps.prep.outputs.sdk_dir }}/package/easytier/"
 
+      - name: Select packages
+        working-directory: ${{ steps.prep.outputs.sdk_dir }}
+        run: |
+          cat >> .config << 'EOF'
+          CONFIG_PACKAGE_easytier=y
+          CONFIG_PACKAGE_easytier-lite=y
+          EOF
+          make defconfig
+
       - name: Build full variant
         working-directory: ${{ steps.prep.outputs.sdk_dir }}
         timeout-minutes: 300
