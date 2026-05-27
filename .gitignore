@@ -22,3 +22,20 @@ target/
 .DS_Store
 Thumbs.db
 .gitmodules
+
+# Environment
+.env
+
+# Skills (AI system, not project files)
+skills/
+
+# Download output
+download/
+
+# Research / temp data
+luci_*.json
+official_docs.json
+easytier_config_docs.json
+
+# Upload staging
+upload/
