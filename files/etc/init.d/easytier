@@ -286,10 +286,11 @@ _get_dev_name() {
 
 setup_network() {
         local cfg="$1"
-        local dev_name proxy_forward_by_system
+        local dev_name proxy_forward_by_system enable_exit_node
         dev_name=$(_get_dev_name "$cfg")
 
         config_get proxy_forward_by_system "$cfg" proxy_forward_by_system "0"
+        config_get enable_exit_node "$cfg" enable_exit_node "0"
 
         # Wait for TUN device to appear (up to 10 seconds)
         local i=0
@@ -308,7 +309,7 @@ setup_network() {
 
         # Configure firewall
         if [ "$auto_firewall" = "1" ]; then
-                setup_firewall "$cfg" "$dev_name" "$firewall_zone" "$proxy_forward_by_system"
+                setup_firewall "$cfg" "$dev_name" "$firewall_zone" "$proxy_forward_by_system" "$enable_exit_node"
         fi
 
         # Configure dnsmasq for Magic DNS
@@ -345,6 +346,7 @@ setup_firewall() {
         local dev_name="$2"
         local zone="$3"
         local forward_by_system="$4"
+        local exit_node="$5"
 
         uci -q batch <<-EOF
                 set firewall.$cfg=zone
@@ -362,6 +364,13 @@ setup_firewall() {
                 set firewall.${zone}_${cfg}_fwd.dest='$cfg'
         EOF
         [ "$forward_by_system" = "1" ] && uci set firewall.$cfg.masq='1'
+        # When OS kernel handles forwarding AND this node is an exit node,
+        # allow EasyTier zone → wan forwarding (traffic exits to internet)
+        if [ "$forward_by_system" = "1" ] && [ "$exit_node" = "1" ]; then
+                uci set firewall.${cfg}_wan_fwd=forwarding
+                uci set firewall.${cfg}_wan_fwd.src='$cfg'
+                uci set firewall.${cfg}_wan_fwd.dest='wan'
+        fi
         uci commit firewall
         /etc/init.d/firewall reload
 }
@@ -375,6 +384,7 @@ teardown_firewall() {
                 delete firewall.$cfg
                 delete firewall.${cfg}_fwd
                 delete firewall.${zone}_${cfg}_fwd
+                delete firewall.${cfg}_wan_fwd
         EOF
         uci commit firewall
         /etc/init.d/firewall reload
