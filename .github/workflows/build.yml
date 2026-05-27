@@ -84,6 +84,7 @@ jobs:
 
             echo "=== Configuring $SDK_VER build ==="
             ./scripts/feeds update -a
+            ./scripts/feeds install -a
 
             # Copy package source
             mkdir -p package/easytier
@@ -112,6 +113,11 @@ jobs:
             # Select packages
             printf 'CONFIG_PACKAGE_easytier=y\nCONFIG_PACKAGE_easytier-lite=y\n' >> .config
             make defconfig
+
+            # Verify packages are selected
+            echo "=== Verifying package selection ==="
+            grep 'CONFIG_PACKAGE_easytier' .config || echo "WARNING: easytier not in .config"
+            grep 'CONFIG_PACKAGE_easytier-lite' .config || echo "WARNING: easytier-lite not in .config"
 
             echo "=== Building full variant ($PKG_FMT) ==="
             make package/easytier/compile V=s || make package/easytier/compile V=s
