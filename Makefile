@@ -82,7 +82,8 @@ CARGO_TARGET:=$(shell echo $(ARCH) | sed \
 define Build/Compile
         $(MAKE_VARS) \
         cargo build --release \
-                --manifest-path $(PKG_BUILD_DIR)/easytier-core/Cargo.toml \
+                --manifest-path $(PKG_BUILD_DIR)/Cargo.toml \
+                -p easytier \
                 --target $(CARGO_TARGET) \
                 $(CARGO_FEATURES) \
                 --locked
