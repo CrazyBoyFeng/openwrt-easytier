@@ -1,6 +1,6 @@
 # openwrt-easytier
 
-[EasyTier](https://github.com/EasyTier/EasyTier) OpenWrt package (lite & full builds).
+[EasyTier](https://github.com/EasyTier/EasyTier) OpenWrt package (lite & full variants of easytier-core).
 
 EasyTier is a simple, decentralized and secure mesh VPN with WireGuard support, connecting your devices into a single virtual LAN, even behind NAT.
 
