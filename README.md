@@ -39,7 +39,7 @@ uci commit easytier
 
 ## External Config Modes
 
-When `config_server` or `config_dir` is set, **network interface, firewall, and DNS are NOT auto-configured** (configuration may change at runtime via config server). Users must manually set up the following three parts.
+When `config_server` or `config_dir` is set, **network interface, firewall, and DNS are NOT auto-configured.** Users must manually set up the following three parts.
 
 > **Prerequisite:** Find your TUN device name first. Run `ip link` after starting EasyTier, or check `logread | grep easytier` for the device name. The following examples assume the device name is `et0`.
 
