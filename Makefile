@@ -72,7 +72,12 @@ ifeq ($(BUILD_VARIANT),full)
   CARGO_FEATURES:=
 endif
 
-CARGO_TARGET:=$(shell echo $(ARCH) | sed 's/aarch64/aarch64-unknown-linux-gnu/;s/armv7/armv7-unknown-linux-gnueabihf/;s/x86_64/x86_64-unknown-linux-gnu/')
+CARGO_TARGET:=$(shell echo $(ARCH) | sed \
+        -e 's/aarch64.*/aarch64-unknown-linux-gnu/' \
+        -e 's/armv7.*/armv7-unknown-linux-gnueabihf/' \
+        -e 's/x86_64.*/x86_64-unknown-linux-gnu/' \
+        -e 's/mipsel.*/mipsel-unknown-linux-gnu/' \
+        -e 's/mips.*/mips-unknown-linux-gnu/')
 
 define Build/Compile
         $(MAKE_VARS) \

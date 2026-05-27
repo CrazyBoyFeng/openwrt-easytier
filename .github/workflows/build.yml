@@ -20,8 +20,11 @@ jobs:
           - '23.05.6'    # ipk
           - '24.10.0'    # apk
     runs-on: ubuntu-latest
+    timeout-minutes: 360
     env:
       TERM: xterm
+      RUSTC_WRAPPER: sccache
+      SCCACHE_CACHE_SIZE: 2G
 
     steps:
       - name: Checkout
@@ -69,6 +72,9 @@ jobs:
             echo "::endgroup::"
           fi
 
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.7
+
       - name: Cache toolchain and downloads
         uses: actions/cache@v4
         with:
@@ -93,13 +99,19 @@ jobs:
 
       - name: Build full variant
         working-directory: ${{ steps.prep.outputs.sdk_dir }}
+        timeout-minutes: 300
         run: |
           make "package/easytier/compile" V=s || make "package/easytier/compile" V=s
 
       - name: Build lite variant
         working-directory: ${{ steps.prep.outputs.sdk_dir }}
+        timeout-minutes: 300
         run: |
           make "package/easytier-lite/compile" V=s || make "package/easytier-lite/compile" V=s
+
+      - name: sccache stats
+        if: always()
+        run: sccache --show-stats
 
       - name: Upload package artifacts
         uses: actions/upload-artifact@v4
