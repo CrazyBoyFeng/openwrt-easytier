@@ -39,7 +39,9 @@ uci commit easytier
 
 ## External Config Modes
 
-When any of `config_server`, `config_file`, or `config_dir` is set, **network interface, firewall, and DNS are NOT auto-configured** — similar to how [ZeroTier](https://openwrt.org/docs/guide-user/services/vpn/zerotier) and [Tailscale](https://openwrt.org/docs/guide-user/services/vpn/tailscale) work on OpenWrt. Users must manually configure `/etc/config/network` and `/etc/config/firewall`.
+When `config_server` or `config_dir` is set, **network interface, firewall, and DNS are NOT auto-configured** — the config may change at runtime. Users must manually configure `/etc/config/network` and `/etc/config/firewall`.
+
+When `config_file` is set, auto-configuration still works because CLI parameters override TOML values, so the TUN device name remains predictable.
 
 ```uci
 # Config server
@@ -57,7 +59,7 @@ config easytier 'easytier'
 
 ## UCI Configuration
 
-All options are defined in a single `config easytier` section in `/etc/config/easytier`.
+Options are defined in `config easytier` sections in `/etc/config/easytier`.
 
 Multiple `config easytier` sections can be defined for multi-instance (each section starts an independent `easytier-core` process with its own TUN device and firewall zone). The **section name** is used as the default value for `--instance-name` and `--dev-name` (`et_{section_name}`).
 
@@ -176,11 +178,11 @@ Options are ordered following the [official documentation](https://easytier.cn/g
 
 ### OpenWrt Integration
 
-Only effective when none of `config_server`, `config_file`, `config_dir` is set.
+Not effective when `config_server` or `config_dir` is set.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `auto_firewall` | bool | `1` | Create firewall zone with `masq` and `mtu_fix`, plus forwarding |
+| `auto_firewall` | bool | `1` | Create firewall zone with `mtu_fix` and bidirectional forwarding |
 | `firewall_zone` | string | `lan` | Firewall zone to forward traffic to/from |
 | `auto_dnsmasq` | bool | `1` | Forward `tld_dns_zone` queries to `100.100.100.101` via dnsmasq |
 
@@ -191,8 +193,8 @@ The procd init script automatically handles:
 1. **IP forwarding** - Enable `net.ipv4.ip_forward` on start
 2. **Process management** - Start/stop/restart `easytier-core` via procd, auto-respawn
 3. **TUN device** - Wait for TUN device, bring it up
-4. **Firewall** - Create zone with `masq`/`mtu_fix`, bidirectional forwarding (not in external config mode)
-5. **DNS (Magic DNS)** - Add dnsmasq forwarding rule for `tld_dns_zone` (not in external config mode)
+4. **Firewall** - Create zone with `mtu_fix` and bidirectional forwarding; `masq` when `proxy_forward_by_system=1` (skipped for `config_server`/`config_dir`)
+5. **DNS (Magic DNS)** - Add dnsmasq forwarding rule for `tld_dns_zone` (skipped for `config_server`/`config_dir`)
 6. **Cleanup** - Remove firewall rules and dnsmasq config on stop
 7. **Hot reload** - UCI changes trigger automatic restart via `procd_add_reload_trigger`
 
