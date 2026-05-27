@@ -242,10 +242,8 @@ start_instance() {
 
         procd_close_instance
 
-        # Post-start: auto-configure network (skip when using external config)
-        if [ -z "$config_server" ] && [ -z "$config_file" ] && [ -z "$config_dir" ]; then
-                setup_network "$cfg"
-        fi
+        # Post-start: auto-configure network
+        setup_network "$cfg"
 }
 
 stop_instance() {
