@@ -93,6 +93,11 @@ jobs:
             # Remove rust/host build dependency — CI uses rustup instead
             sed -i '/^PKG_BUILD_DEPENDS:=rust\/host$/d' package/easytier/Makefile
 
+            # Disable sccache for OpenWrt cargo build — the SDK build directory
+            # path is too long and exceeds the Unix domain socket SUN_LEN (108 bytes)
+            # limit, causing: "sccache: error: path must be shorter than SUN_LEN"
+            unset RUSTC_WRAPPER
+
             if [ "$BUILD_STD" = "true" ]; then
               # Add -Zbuild-std to cargo build (compiles std from source)
               sed -i 's|cargo build --release|cargo build -Z build-std --release|' \
