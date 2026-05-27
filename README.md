@@ -228,7 +228,7 @@ git clone https://github.com/CrazyBoyFeng/openwrt-easytier.git \
 make menuconfig
 
 # Build lite
-make package/easytier/compile V=s
+make package/easytier-lite/compile V=s
 
 # Build full
 make package/easytier/compile V=s
