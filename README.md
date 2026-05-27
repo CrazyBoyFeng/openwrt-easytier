@@ -220,6 +220,10 @@ config easytier 'home'
 git clone https://github.com/CrazyBoyFeng/openwrt-easytier.git \
     package/easytier
 
+# Update feeds so OpenWrt can find the new package
+./scripts/feeds update -a
+./scripts/feeds install -a
+
 # Configure
 make menuconfig
 
