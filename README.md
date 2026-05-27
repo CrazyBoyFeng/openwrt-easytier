@@ -39,7 +39,9 @@ uci commit easytier
 
 ## External Config Modes
 
-When `config_server` or `config_dir` is set, **network interface, firewall, and DNS are NOT auto-configured.** Users must manually configure `/etc/config/network` and `/etc/config/firewall`.
+When `config_server` or `config_dir` is set, **network interface, firewall, and DNS are NOT auto-configured** (configuration may change at runtime via config server). Users must manually set up the following three parts.
+
+> **Prerequisite:** Find your TUN device name first. Run `ip link` after starting EasyTier, or check `logread | grep easytier` for the device name. The following examples assume the device name is `et0`.
 
 ```uci
 # Config server
@@ -50,6 +52,86 @@ config easytier 'easytier'
 
 # Config directory (load all .toml, persist config-server settings)
 # option config_dir '/etc/easytier'
+```
+
+### 1. Network Interface
+
+EasyTier creates the TUN device itself, but you need to bring it up and (optionally) assign it to a UCI network interface so that other OpenWrt services can reference it. Edit `/etc/config/network`:
+
+```uci
+# /etc/config/network
+config device
+    option name 'et0'              # must match the TUN device name
+    option mtu '1420'              # optional, EasyTier default is 1420
+
+config interface 'et0'
+    option device 'et0'
+    option proto 'none'            # no DHCP or static IP — EasyTier manages addressing
+```
+
+> If you don't need other OpenWrt services (e.g., `dhcp` firewall zone) to reference this interface, you can skip the UCI interface and just run `ip link set et0 up` manually or via a hotplug script.
+
+### 2. Firewall
+
+Create a firewall zone for the TUN device and set up forwarding rules. Edit `/etc/config/firewall`:
+
+**Basic setup (bidirectional forwarding with LAN):**
+
+```uci
+# /etc/config/firewall
+config zone
+    option name 'et0'
+    option input 'ACCEPT'
+    option output 'ACCEPT'
+    option forward 'ACCEPT'
+    option network 'et0'
+    option mtu_fix '1'             # MSS clamping — always recommended for TUN
+
+# LAN ↔ EasyTier (LAN devices access the virtual network)
+config forwarding
+    option src 'lan'
+    option dest 'et0'
+
+# EasyTier ↔ LAN (virtual network devices access LAN)
+config forwarding
+    option src 'et0'
+    option dest 'lan'
+```
+
+**If `proxy_forward_by_system` is enabled**, add masquerade on the EasyTier zone:
+
+```uci
+config zone
+    option name 'et0'
+    # ... (same as above)
+    option masq '1'                # OS kernel performs NAT for forwarded traffic
+```
+
+**If both `proxy_forward_by_system` and `enable_exit_node` are enabled**, additionally allow EasyTier → WAN forwarding so exit traffic can reach the internet:
+
+```uci
+# EasyTier → WAN (exit node traffic to internet)
+config forwarding
+    option src 'et0'
+    option dest 'wan'
+```
+
+### 3. DNS (Magic DNS)
+
+If Magic DNS is enabled in your EasyTier config, forward the TLD zone to EasyTier's built-in DNS resolver (`100.100.100.101`). Edit `/etc/config/dhcp`:
+
+```uci
+# /etc/config/dhcp — replace "et.net" with your actual tld_dns_zone
+config dnsmasq
+    option server '/et.net/100.100.100.101'
+```
+
+Then reload the services:
+
+```sh
+/etc/init.d/network reload
+/etc/init.d/firewall reload
+/etc/init.d/dnsmasq restart
 ```
 
 ## UCI Configuration
