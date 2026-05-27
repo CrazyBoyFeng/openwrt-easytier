@@ -16,16 +16,13 @@ jobs:
           - target: 'x86/64'
             slug: 'x86-64'
             cargo_target: 'x86_64-unknown-linux-gnu'
-            use_rustup: true
           - target: 'mediatek/filogic'
             slug: 'mediatek-filogic'
             cargo_target: 'aarch64-unknown-linux-gnu'
-            use_rustup: true
           - target: 'ramips/mt7621'
             slug: 'ramips-mt7621'
             cargo_target: 'mipsel-unknown-linux-gnu'
-            use_rustup: false
-            sdks: '["24.10.6"]'
+            build_std: true
     runs-on: ubuntu-latest
     timeout-minutes: 360
     env:
@@ -38,10 +35,16 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Rust via rustup
-        if: matrix.use_rustup
         run: |
-          rustup default stable
-          rustup target add ${{ matrix.cargo_target }}
+          if [ "${{ matrix.build_std }}" = "true" ]; then
+            # Nightly with rust-src for -Zbuild-std (targets without prebuilt std)
+            rustup default nightly
+            rustup component add rust-src
+          else
+            # Stable with prebuilt std
+            rustup default stable
+            rustup target add ${{ matrix.cargo_target }}
+          fi
 
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.7
@@ -52,7 +55,7 @@ jobs:
           SLUG="${{ matrix.slug }}"
           CARGO_TARGET="${{ matrix.cargo_target }}"
           WORKSPACE="$GITHUB_WORKSPACE"
-          USE_RUSTUP="${{ matrix.use_rustup }}"
+          BUILD_STD="${{ matrix.build_std }}"
 
           build_sdk() {
             local SDK_VER="$1"
@@ -86,23 +89,24 @@ jobs:
             mkdir -p package/easytier
             cp -r "$WORKSPACE/Makefile" "$WORKSPACE/patches" "$WORKSPACE/files" package/easytier/
 
-            if [ "$USE_RUSTUP" = "true" ]; then
-              # Remove rust/host build dependency — CI uses rustup instead
-              sed -i '/^PKG_BUILD_DEPENDS:=rust\/host$/d' package/easytier/Makefile
+            # Remove rust/host build dependency — CI uses rustup instead
+            sed -i '/^PKG_BUILD_DEPENDS:=rust\/host$/d' package/easytier/Makefile
 
-              # Configure cargo cross-compiler linker (non-native targets only)
-              if [ "$CARGO_TARGET" != "x86_64-unknown-linux-gnu" ]; then
-                local LINKER
-                LINKER=$(find staging_dir/toolchain* -name '*-gcc' -type f | head -1)
-                if [ -n "$LINKER" ]; then
-                  mkdir -p "$HOME/.cargo"
-                  printf '[target.%s]\nlinker = "%s"\n' "$CARGO_TARGET" "$LINKER" > "$HOME/.cargo/config.toml"
-                  echo "Cargo linker: $LINKER"
-                fi
+            if [ "$BUILD_STD" = "true" ]; then
+              # Add -Zbuild-std to cargo build (compiles std from source)
+              sed -i 's|cargo build --release|cargo build -Z build-std --release|' \
+                package/easytier/Makefile
+            fi
+
+            # Configure cargo cross-compiler linker (non-native targets only)
+            if [ "$CARGO_TARGET" != "x86_64-unknown-linux-gnu" ]; then
+              local LINKER
+              LINKER=$(find staging_dir/toolchain* -name '*-gcc' -type f | head -1)
+              if [ -n "$LINKER" ]; then
+                mkdir -p "$HOME/.cargo"
+                printf '[target.%s]\nlinker = "%s"\n' "$CARGO_TARGET" "$LINKER" > "$HOME/.cargo/config.toml"
+                echo "Cargo linker: $LINKER"
               fi
-            else
-              # Use feeds' rust package (required for targets without prebuilt std)
-              ./scripts/feeds install rust
             fi
 
             # Select packages
@@ -124,14 +128,9 @@ jobs:
             echo "=== $SDK_VER ($PKG_FMT) done ==="
           }
 
-          # rustup targets: build both ipk and apk (sccache accelerates second build)
-          # feeds rust: build only specified SDKs (mipsel has no prebuilt std)
-          if [ "$USE_RUSTUP" = "true" ]; then
-            build_sdk "23.05.6" "ipk" "xz"
-            build_sdk "24.10.6" "apk" "zst"
-          else
-            build_sdk "24.10.6" "apk" "zst"
-          fi
+          # Build ipk first, then apk — sccache shares Rust artifacts between builds
+          build_sdk "23.05.6" "ipk" "xz"
+          build_sdk "24.10.6" "apk" "zst"
 
       - name: sccache stats
         if: always()
