@@ -6,10 +6,10 @@ EasyTier is a simple, decentralized and secure mesh VPN with WireGuard support, 
 
 ## Build Variants
 
-| Variant | Package | Features | Target |
-|---------|---------|----------|--------|
-| lite | `easytier-lite` | tun, magic-dns, quic, kcp, websocket, faketcp, zstd, aes-gcm | Routers with limited flash (MT7621, 32MB) |
-| full | `easytier` | all default features | x86 soft routers, aarch64 devices |
+| Variant | Package | Features |
+|---------|---------|----------|
+| lite | `easytier-lite` | tun, magic-dns, quic, kcp, websocket, faketcp, zstd, aes-gcm |
+| full | `easytier` | all default features |
 
 Removed from lite: `wireguard`, `socks5`, `smoltcp`. Users can install standalone OS packages (`wireguard-tools`, `microsocks`) if needed.
 
@@ -39,9 +39,7 @@ uci commit easytier
 
 ## External Config Modes
 
-When `config_server` or `config_dir` is set, **network interface, firewall, and DNS are NOT auto-configured** — the config may change at runtime. Users must manually configure `/etc/config/network` and `/etc/config/firewall`.
-
-When `config_file` is set, auto-configuration still works because CLI parameters override TOML values, so the TUN device name remains predictable.
+When `config_server` or `config_dir` is set, **network interface, firewall, and DNS are NOT auto-configured.** Users must manually configure `/etc/config/network` and `/etc/config/firewall`.
 
 ```uci
 # Config server
@@ -49,9 +47,6 @@ config easytier 'easytier'
     option enabled '1'
     option config_server 'admin'
     # option machine_id ''
-
-# Config file
-# option config_file '/etc/easytier/config.toml'
 
 # Config directory (load all .toml, persist config-server settings)
 # option config_dir '/etc/easytier'
@@ -63,9 +58,9 @@ Options are defined in `config easytier` sections in `/etc/config/easytier`.
 
 Multiple `config easytier` sections can be defined for multi-instance (each section starts an independent `easytier-core` process with its own TUN device and firewall zone). The **section name** is used as the default value for `--instance-name` and `--dev-name` (`et_{section_name}`).
 
-Options are ordered following the [official documentation](https://easytier.cn/guide/network/configurations.html).
+Options are following the [official documentation](https://easytier.cn/guide/network/configurations.html).
 
-### Config Server / File / Directory
+### Config Settings
 
 | Option | Type | Default | CLI Equivalent | Description |
 |--------|------|---------|---------------|-------------|
@@ -193,19 +188,10 @@ The procd init script automatically handles:
 1. **IP forwarding** - Enable `net.ipv4.ip_forward` on start
 2. **Process management** - Start/stop/restart `easytier-core` via procd, auto-respawn
 3. **TUN device** - Wait for TUN device, bring it up
-4. **Firewall** - Create zone with `mtu_fix` and bidirectional forwarding; `masq` when `proxy_forward_by_system=1` (skipped for `config_server`/`config_dir`)
-5. **DNS (Magic DNS)** - Add dnsmasq forwarding rule for `tld_dns_zone` (skipped for `config_server`/`config_dir`)
+4. **Firewall** - Create zone with `mtu_fix` and bidirectional forwarding; `masq` when `proxy_forward_by_system=1`
+5. **DNS (Magic DNS)** - Add dnsmasq forwarding rule for `tld_dns_zone`
 6. **Cleanup** - Remove firewall rules and dnsmasq config on stop
 7. **Hot reload** - UCI changes trigger automatic restart via `procd_add_reload_trigger`
-
-### Magic DNS on OpenWrt
-
-When `accept_dns` is enabled, the init script adds a dnsmasq forwarding rule:
-```
-server=/et.net/100.100.100.101
-```
-
-LAN devices can then access EasyTier peers via `hostname.et.net`.
 
 ## Multi-Instance Example
 
@@ -234,11 +220,11 @@ config easytier 'home'
 git clone https://github.com/CrazyBoyFeng/openwrt-easytier.git \
     package/easytier
 
-# Configure (select Network -> VPN -> easytier-lite or easytier)
+# Configure
 make menuconfig
 
 # Build lite
-make package/easytier-lite/compile V=s
+make package/easytier/compile V=s
 
 # Build full
 make package/easytier/compile V=s
