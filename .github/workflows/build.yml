@@ -84,7 +84,7 @@ jobs:
 
             echo "=== Configuring $SDK_VER build ==="
             ./scripts/feeds update -a
-            ./scripts/feeds install -a
+            ./scripts/feeds install kmod-tun
 
             # Copy package source
             mkdir -p package/easytier
