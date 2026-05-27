@@ -243,7 +243,12 @@ start_instance() {
         procd_close_instance
 
         # Post-start: auto-configure network
-        setup_network "$cfg"
+        # config_file: TOML values are overridden by CLI params, so TUN
+        # device name is predictable — safe to auto-configure.
+        # config_server/config_dir: skip — config may change at runtime.
+        if [ -z "$config_server" ] && [ -z "$config_dir" ]; then
+                setup_network "$cfg"
+        fi
 }
 
 stop_instance() {
