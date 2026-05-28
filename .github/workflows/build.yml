@@ -46,6 +46,9 @@ jobs:
             rustup target add ${{ matrix.cargo_target }}
           fi
 
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.7
 
