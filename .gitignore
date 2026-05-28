@@ -33,9 +33,7 @@ skills/
 download/
 
 # Research / temp data
-luci_*.json
-official_docs.json
-easytier_config_docs.json
+*.json
 worklog.md
 
 # Upload staging
