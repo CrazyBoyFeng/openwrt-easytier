@@ -72,39 +72,44 @@ ifeq ($(BUILD_VARIANT),full)
   CARGO_FEATURES:=
 endif
 
-CARGO_TARGET:=$(shell echo $(ARCH) | sed \
-	-e 's/aarch64.*/aarch64-unknown-linux-gnu/' \
-	-e 's/armv7.*/armv7-unknown-linux-gnueabihf/' \
-	-e 's/x86_64.*/x86_64-unknown-linux-gnu/' \
-	-e 's/mipsel.*/mipsel-unknown-linux-gnu/' \
-	-e 's/mips.*/mips-unknown-linux-gnu/')
+# Allow CARGO_TARGET to be overridden (e.g. from build.yml matrix),
+# otherwise derive it from ARCH.  NOTE: for mipsel boards OpenWrt sets
+# ARCH=mips, so an explicit override is required.
+CARGO_TARGET?=$(shell echo $(ARCH) | sed \
+        -e 's/aarch64.*/aarch64-unknown-linux-gnu/' \
+        -e 's/armv7.*/armv7-unknown-linux-gnueabihf/' \
+        -e 's/x86_64.*/x86_64-unknown-linux-gnu/' \
+        -e 's/mipsel.*/mipsel-unknown-linux-gnu/' \
+        -e 's/mips.*/mips-unknown-linux-gnu/')
 
 define Build/Compile
-	$(MAKE_VARS) \
-	cargo build --release \
-	        --manifest-path $(PKG_BUILD_DIR)/Cargo.toml \
-	        -p easytier \
-	        --target $(CARGO_TARGET) \
-	        $(CARGO_FEATURES) 
+        $(MAKE_VARS) \
+        CC="$(TARGET_CC)" \
+        CXX="$(TARGET_CXX)" \
+        cargo build --release \
+                --manifest-path $(PKG_BUILD_DIR)/Cargo.toml \
+                -p easytier \
+                --target $(CARGO_TARGET) \
+                $(CARGO_FEATURES)
 endef
 
 # ============ Install ============
 define Package/easytier-lite/install
-	$(INSTALL_DIR) $(1)/usr/bin
-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/target/$(CARGO_TARGET)/release/easytier-core $(1)/usr/bin/
-	$(INSTALL_DIR) $(1)/etc/config
-	$(INSTALL_CONF) ./files/etc/config/easytier $(1)/etc/config/easytier
-	$(INSTALL_DIR) $(1)/etc/init.d
-	$(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
+        $(INSTALL_DIR) $(1)/usr/bin
+        $(INSTALL_BIN) $(PKG_BUILD_DIR)/target/$(CARGO_TARGET)/release/easytier-core $(1)/usr/bin/
+        $(INSTALL_DIR) $(1)/etc/config
+        $(INSTALL_CONF) ./files/etc/config/easytier $(1)/etc/config/easytier
+        $(INSTALL_DIR) $(1)/etc/init.d
+        $(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
 endef
 
 define Package/easytier/install
-	$(INSTALL_DIR) $(1)/usr/bin
-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/target/$(CARGO_TARGET)/release/easytier-core $(1)/usr/bin/
-	$(INSTALL_DIR) $(1)/etc/config
-	$(INSTALL_CONF) ./files/etc/config/easytier $(1)/etc/config/easytier
-	$(INSTALL_DIR) $(1)/etc/init.d
-	$(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
+        $(INSTALL_DIR) $(1)/usr/bin
+        $(INSTALL_BIN) $(PKG_BUILD_DIR)/target/$(CARGO_TARGET)/release/easytier-core $(1)/usr/bin/
+        $(INSTALL_DIR) $(1)/etc/config
+        $(INSTALL_CONF) ./files/etc/config/easytier $(1)/etc/config/easytier
+        $(INSTALL_DIR) $(1)/etc/init.d
+        $(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
 endef
 
 $(eval $(call BuildPackage,easytier-lite))

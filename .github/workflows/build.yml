@@ -104,15 +104,14 @@ jobs:
                 package/easytier/Makefile
             fi
 
-            # Configure cargo cross-compiler linker (non-native targets only)
-            if [ "$CARGO_TARGET" != "x86_64-unknown-linux-gnu" ]; then
-              local LINKER
-              LINKER=$(find staging_dir/toolchain* -name '*-gcc' -type f | head -1)
-              if [ -n "$LINKER" ]; then
-                mkdir -p "$HOME/.cargo"
-                printf '[target.%s]\nlinker = "%s"\n' "$CARGO_TARGET" "$LINKER" > "$HOME/.cargo/config.toml"
-                echo "Cargo linker: $LINKER"
-              fi
+            # Configure cargo cross-compiler linker for all targets
+            # (OpenWrt uses musl even on x86_64, so the system linker won't work)
+            local LINKER
+            LINKER=$(find staging_dir/toolchain* -name '*-gcc' -type f | head -1)
+            if [ -n "$LINKER" ]; then
+              mkdir -p "$HOME/.cargo"
+              printf '[target.%s]\nlinker = "%s"\n' "$CARGO_TARGET" "$LINKER" > "$HOME/.cargo/config.toml"
+              echo "Cargo linker: $LINKER"
             fi
 
             # Select packages
@@ -125,10 +124,10 @@ jobs:
             grep 'CONFIG_PACKAGE_easytier-lite' .config || echo "WARNING: easytier-lite not in .config"
 
             echo "=== Building full variant ($PKG_FMT) ==="
-            make package/easytier/compile V=s || make package/easytier/compile V=s
+            make package/easytier/compile CARGO_TARGET="$CARGO_TARGET" V=s || make package/easytier/compile CARGO_TARGET="$CARGO_TARGET" V=s
 
             echo "=== Building lite variant ($PKG_FMT) ==="
-            make package/easytier-lite/compile V=s || make package/easytier-lite/compile V=s
+            make package/easytier-lite/compile CARGO_TARGET="$CARGO_TARGET" V=s || make package/easytier-lite/compile CARGO_TARGET="$CARGO_TARGET" V=s
 
             # Collect artifacts
             mkdir -p "$WORKSPACE/output/$PKG_FMT"
