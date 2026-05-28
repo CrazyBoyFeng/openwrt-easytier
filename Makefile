@@ -52,7 +52,6 @@ define Package/easytier-lite
   TITLE+= (lite build)
   VARIANT:=lite
   PROVIDES:=easytier
-  CONFLICTS:=easytier
 endef
 
 define Package/easytier-lite/description
@@ -67,7 +66,6 @@ define Package/easytier
   $(call Package/easytier/Default)
   TITLE+= (full build)
   VARIANT:=full
-  CONFLICTS:=easytier-lite
 endef
 
 define Package/easytier/description
@@ -93,21 +91,21 @@ $(eval $(call RustBinPackage,easytier-lite))
 $(eval $(call RustBinPackage,easytier))
 
 define Package/easytier-lite/install
-        $(INSTALL_DIR) $(1)/usr/bin
-        $(INSTALL_BIN) $(PKG_INSTALL_DIR)/bin/easytier-core $(1)/usr/bin/
-        $(INSTALL_DIR) $(1)/etc/config
-        $(INSTALL_CONF) ./files/etc/config/easytier $(1)/etc/config/easytier
-        $(INSTALL_DIR) $(1)/etc/init.d
-        $(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
+	$(INSTALL_DIR) $(1)/usr/bin
+	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/bin/easytier-core $(1)/usr/bin/
+	$(INSTALL_DIR) $(1)/etc/config
+	$(INSTALL_CONF) ./files/etc/config/easytier $(1)/etc/config/easytier
+	$(INSTALL_DIR) $(1)/etc/init.d
+	$(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
 endef
 
 define Package/easytier/install
-        $(INSTALL_DIR) $(1)/usr/bin
-        $(INSTALL_BIN) $(PKG_INSTALL_DIR)/bin/easytier-core $(1)/usr/bin/
-        $(INSTALL_DIR) $(1)/etc/config
-        $(INSTALL_CONF) ./files/etc/config/easytier $(1)/etc/config/easytier
-        $(INSTALL_DIR) $(1)/etc/init.d
-        $(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
+	$(INSTALL_DIR) $(1)/usr/bin
+	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/bin/easytier-core $(1)/usr/bin/
+	$(INSTALL_DIR) $(1)/etc/config
+	$(INSTALL_CONF) ./files/etc/config/easytier $(1)/etc/config/easytier
+	$(INSTALL_DIR) $(1)/etc/init.d
+	$(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
 endef
 
 $(eval $(call BuildPackage,easytier-lite))
