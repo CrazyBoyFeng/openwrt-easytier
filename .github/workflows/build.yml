@@ -15,50 +15,24 @@ jobs:
         include:
           - target: 'x86/64'
             slug: 'x86-64'
-            cargo_target: 'x86_64-unknown-linux-musl'
           - target: 'mediatek/filogic'
             slug: 'mediatek-filogic'
-            cargo_target: 'aarch64-unknown-linux-musl'
           - target: 'ramips/mt7621'
             slug: 'ramips-mt7621'
-            cargo_target: 'mipsel-unknown-linux-musl'
-            build_std: true
     runs-on: ubuntu-latest
     timeout-minutes: 360
     env:
       TERM: xterm
-      RUSTC_WRAPPER: sccache
-      SCCACHE_CACHE_SIZE: 2G
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Rust via rustup
-        run: |
-          if [ "${{ matrix.build_std }}" = "true" ]; then
-            # Nightly with rust-src for -Zbuild-std (targets without prebuilt std)
-            rustup default nightly
-            rustup component add rust-src
-          else
-            # Stable with prebuilt std
-            rustup default stable
-            rustup target add ${{ matrix.cargo_target }}
-          fi
-
-      - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-
-      - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.7
-
       - name: Build packages
         timeout-minutes: 330
         run: |
           SLUG="${{ matrix.slug }}"
-          CARGO_TARGET="${{ matrix.cargo_target }}"
           WORKSPACE="$GITHUB_WORKSPACE"
-          BUILD_STD="${{ matrix.build_std }}"
 
           build_sdk() {
             local SDK_VER="$1"
@@ -87,48 +61,19 @@ jobs:
 
             echo "=== Configuring $SDK_VER build ==="
             ./scripts/feeds update -a
-            ./scripts/feeds install kmod-tun
+            ./scripts/feeds install -a
 
             # Copy package source
             mkdir -p package/easytier
             cp -r "$WORKSPACE/Makefile" "$WORKSPACE/patches" "$WORKSPACE/files" package/easytier/
 
-            # Remove rust/host build dependency — CI uses rustup instead
-            sed -i '/^PKG_BUILD_DEPENDS:=rust\/host$/d' package/easytier/Makefile
-
-            # Disable sccache for OpenWrt cargo build — the SDK build directory
-            # path is too long and exceeds the Unix domain socket SUN_LEN (108 bytes)
-            # limit, causing: "sccache: error: path must be shorter than SUN_LEN"
-            unset RUSTC_WRAPPER
-
-            if [ "$BUILD_STD" = "true" ]; then
-              # Add -Zbuild-std to cargo build (compiles std from source)
-              sed -i 's|cargo build --release|cargo build -Z build-std --release|' \
-                package/easytier/Makefile
-            fi
-
-            # Configure cargo cross-compiler linker
-            # Use readlink -f to convert relative path to absolute, because cargo
-            # resolves relative paths from $HOME, not the SDK directory.
-            local LINKER
-            LINKER=$(readlink -f $(find staging_dir/toolchain* -name '*-gcc' -type f | head -1))
-            if [ -n "$LINKER" ]; then
-              mkdir -p "$HOME/.cargo"
-              printf '[target.%s]\nlinker = "%s"\n' "$CARGO_TARGET" "$LINKER" > "$HOME/.cargo/config.toml"
-              echo "Cargo linker: $LINKER"
-            fi
-
             # Select packages
             printf 'CONFIG_PACKAGE_easytier=y\nCONFIG_PACKAGE_easytier-lite=y\n' >> .config
             make defconfig
 
-            # Verify packages are selected
-            echo "=== Verifying package selection ==="
-            grep 'CONFIG_PACKAGE_easytier' .config || echo "WARNING: easytier not in .config"
-            grep 'CONFIG_PACKAGE_easytier-lite' .config || echo "WARNING: easytier-lite not in .config"
-
             echo "=== Building packages ($PKG_FMT) ==="
             make package/easytier/compile V=s || make package/easytier/compile V=s
+            make package/easytier/lite/compile V=s || make package/easytier/lite/compile V=s
 
             # Collect artifacts
             mkdir -p "$WORKSPACE/output/$PKG_FMT"
@@ -139,13 +84,8 @@ jobs:
             echo "=== $SDK_VER ($PKG_FMT) done ==="
           }
 
-          # Build ipk first, then apk — sccache shares Rust artifacts between builds
           build_sdk "23.05.6" "ipk" "xz"
           build_sdk "24.10.6" "apk" "zst"
-
-      - name: sccache stats
-        if: always()
-        run: sccache --show-stats
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
