@@ -299,8 +299,7 @@ config easytier 'home'
 
 ```sh
 # Clone into your SDK's package directory
-git clone https://github.com/CrazyBoyFeng/openwrt-easytier.git \
-    package/easytier
+git clone https://github.com/CrazyBoyFeng/openwrt-easytier.git package/easytier
 
 # Update and install all feeds (required for rust/host, protobuf/host, kmod-tun)
 ./scripts/feeds update -a
