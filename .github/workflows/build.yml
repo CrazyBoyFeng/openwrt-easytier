@@ -131,7 +131,7 @@ jobs:
             make package/easytier/compile V=s || make package/easytier/compile V=s
 
             echo "=== Building lite variant ($PKG_FMT) ==="
-            make package/easytier-lite/compile V=s || make package/easytier-lite/compile V=s
+            make package/easytier/lite/compile V=s || make package/easytier/lite/compile V=s
 
             # Collect artifacts
             mkdir -p "$WORKSPACE/output/$PKG_FMT"
