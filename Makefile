@@ -46,7 +46,7 @@ define Package/easytier-lite/description
   $(call Package/easytier/Default/description)
   .
   This lite build removes wireguard, socks5 and smoltcp features.
-  Suitable for routers with limited flash storage (e.g. MT7621, 32MB).
+  Suitable for routers with limited flash storage.
 endef
 
 # ============ easytier (full) ============
@@ -75,7 +75,7 @@ endif
 # Derive the Rust/cargo target triple from OpenWrt's TARGET_CC.
 # Converts the OpenWrt toolchain triplet to the Rust equivalent:
 #   {arch}-openwrt-linux-{abi}-gcc  →  {arch}-unknown-linux-{abi}
-# This works for any architecture / ABI that OpenWrt supports.
+# This should work for any architecture / ABI that OpenWrt supports.
 CARGO_TARGET:=$(shell echo $(TARGET_CC) | sed 's/-openwrt-/-unknown-/;s/-gcc$$//')
 
 define Build/Compile
