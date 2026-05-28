@@ -15,13 +15,11 @@ jobs:
         include:
           - target: 'x86/64'
             slug: 'x86-64'
-            rust_target: 'x86_64-unknown-linux-musl'
           - target: 'mediatek/filogic'
             slug: 'mediatek-filogic'
-            rust_target: 'aarch64-unknown-linux-musl'
           - target: 'ramips/mt7621'
             slug: 'ramips-mt7621'
-            rust_target: 'mipsel-unknown-linux-musl'
+            build_std: true
     runs-on: ubuntu-latest
     timeout-minutes: 360
     env:
@@ -33,8 +31,14 @@ jobs:
 
       - name: Install Rust via rustup
         run: |
-          rustup default stable
-          rustup target add ${{ matrix.rust_target }}
+          if [ "${{ matrix.build_std }}" = "true" ]; then
+            # Nightly + rust-src for -Zbuild-std (targets without prebuilt std)
+            rustup default nightly
+            rustup component add rust-src
+          else
+            # Stable with prebuilt std
+            rustup default stable
+          fi
 
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
@@ -82,6 +86,11 @@ jobs:
             # building rust/host and protobuf/host from source (much faster).
             sed -i 's/rust\/host protobuf\/host //' package/easytier/Makefile
             sed -i 's|PROTOC=\$(STAGING_DIR_HOSTPKG)/bin/protoc|PROTOC=/usr/bin/protoc|' package/easytier/Makefile
+
+            # For targets without prebuilt std (e.g. mipsel), compile std from source
+            if [ "${{ matrix.build_std }}" = "true" ]; then
+              sed -i 's/^CARGO_EXTRA_FLAGS:=/CARGO_EXTRA_FLAGS:=-Z build-std/' package/easytier/Makefile
+            fi
 
             # Select packages
             printf 'CONFIG_PACKAGE_easytier=y\nCONFIG_PACKAGE_easytier-lite=y\n' >> .config
