@@ -79,33 +79,33 @@ endif
 CARGO_TARGET:=$(shell echo $(TARGET_CC) | sed 's/-openwrt-/-unknown-/;s/-gcc$$//')
 
 define Build/Compile
-        $(MAKE_VARS) \
-        CC="$(TARGET_CC)" \
-        CXX="$(TARGET_CXX)" \
-        cargo build --release \
-                --manifest-path $(PKG_BUILD_DIR)/Cargo.toml \
-                -p easytier \
-                --target $(CARGO_TARGET) \
-                $(CARGO_FEATURES)
+	$(MAKE_VARS) \
+	CC="$(TARGET_CC)" \
+	CXX="$(TARGET_CXX)" \
+	cargo build --release \
+	        --manifest-path $(PKG_BUILD_DIR)/Cargo.toml \
+	        -p easytier \
+	        --target $(CARGO_TARGET) \
+	        $(CARGO_FEATURES)
 endef
 
 # ============ Install ============
 define Package/easytier-lite/install
-        $(INSTALL_DIR) $(1)/usr/bin
-        $(INSTALL_BIN) $(PKG_BUILD_DIR)/target/$(CARGO_TARGET)/release/easytier-core $(1)/usr/bin/
-        $(INSTALL_DIR) $(1)/etc/config
-        $(INSTALL_CONF) ./files/etc/config/easytier $(1)/etc/config/easytier
-        $(INSTALL_DIR) $(1)/etc/init.d
-        $(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
+	$(INSTALL_DIR) $(1)/usr/bin
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/target/$(CARGO_TARGET)/release/easytier-core $(1)/usr/bin/
+	$(INSTALL_DIR) $(1)/etc/config
+	$(INSTALL_CONF) ./files/etc/config/easytier $(1)/etc/config/easytier
+	$(INSTALL_DIR) $(1)/etc/init.d
+	$(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
 endef
 
 define Package/easytier/install
-        $(INSTALL_DIR) $(1)/usr/bin
-        $(INSTALL_BIN) $(PKG_BUILD_DIR)/target/$(CARGO_TARGET)/release/easytier-core $(1)/usr/bin/
-        $(INSTALL_DIR) $(1)/etc/config
-        $(INSTALL_CONF) ./files/etc/config/easytier $(1)/etc/config/easytier
-        $(INSTALL_DIR) $(1)/etc/init.d
-        $(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
+	$(INSTALL_DIR) $(1)/usr/bin
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/target/$(CARGO_TARGET)/release/easytier-core $(1)/usr/bin/
+	$(INSTALL_DIR) $(1)/etc/config
+	$(INSTALL_CONF) ./files/etc/config/easytier $(1)/etc/config/easytier
+	$(INSTALL_DIR) $(1)/etc/init.d
+	$(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
 endef
 
 $(eval $(call BuildPackage,easytier-lite))
