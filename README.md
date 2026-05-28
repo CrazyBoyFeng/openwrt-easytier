@@ -297,23 +297,27 @@ config easytier 'home'
 
 ### Using OpenWrt SDK
 
+> **Note:** This package depends on `rust/host` and `protobuf/host`, which are
+> built from the OpenWrt packages feed. The first build will compile the full
+> Rust toolchain and may take a while.
+
 ```sh
 # Clone into your SDK's package directory
 git clone https://github.com/CrazyBoyFeng/openwrt-easytier.git \
     package/easytier
 
-# Update feeds so OpenWrt can find the new package
+# Update and install all feeds (required for rust/host, protobuf/host, kmod-tun)
 ./scripts/feeds update -a
 ./scripts/feeds install -a
 
 # Configure
 make menuconfig
 
-# Build lite
-make package/easytier-lite/compile V=s
-
-# Build full
+# Build full variant
 make package/easytier/compile V=s
+
+# Build lite variant
+make package/easytier/lite/compile V=s
 ```
 
 ## Log Viewing
