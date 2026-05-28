@@ -52,6 +52,7 @@ define Package/easytier-lite
   TITLE+= (lite build)
   VARIANT:=lite
   PROVIDES:=easytier
+  CONFLICTS:=easytier
 endef
 
 define Package/easytier-lite/description
@@ -66,6 +67,7 @@ define Package/easytier
   $(call Package/easytier/Default)
   TITLE+= (full build)
   VARIANT:=full
+  CONFLICTS:=easytier-lite
 endef
 
 define Package/easytier/description
