@@ -127,11 +127,8 @@ jobs:
             grep 'CONFIG_PACKAGE_easytier' .config || echo "WARNING: easytier not in .config"
             grep 'CONFIG_PACKAGE_easytier-lite' .config || echo "WARNING: easytier-lite not in .config"
 
-            echo "=== Building full variant ($PKG_FMT) ==="
+            echo "=== Building packages ($PKG_FMT) ==="
             make package/easytier/compile V=s || make package/easytier/compile V=s
-
-            echo "=== Building lite variant ($PKG_FMT) ==="
-            make package/easytier/lite/compile V=s || make package/easytier/lite/compile V=s
 
             # Collect artifacts
             mkdir -p "$WORKSPACE/output/$PKG_FMT"
