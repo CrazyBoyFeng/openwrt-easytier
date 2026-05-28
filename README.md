@@ -297,10 +297,6 @@ config easytier 'home'
 
 ### Using OpenWrt SDK
 
-> **Note:** This package depends on `rust/host` and `protobuf/host`, which are
-> built from the OpenWrt packages feed. The first build will compile the full
-> Rust toolchain and may take a while.
-
 ```sh
 # Clone into your SDK's package directory
 git clone https://github.com/CrazyBoyFeng/openwrt-easytier.git \
