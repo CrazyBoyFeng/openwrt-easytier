@@ -20,7 +20,7 @@ PKG_BUILD_DEPENDS:=rust/host protobuf/host
 PKG_BUILD_PARALLEL:=1
 
 include $(INCLUDE_DIR)/package.mk
-include ../../lang/rust/rust-package.mk
+include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk
 
 # prost-build needs protoc on the host
 CARGO_PKG_VARS += PROTOC=$(STAGING_DIR_HOSTPKG)/bin/protoc
@@ -78,26 +78,26 @@ ifeq ($(BUILD_VARIANT),lite)
 endif
 
 define Build/Compile
-	$(call Build/Compile/Cargo,easytier)
+        $(call Build/Compile/Cargo,easytier)
 endef
 
 # ============ Install ============
 define Package/easytier-lite/install
-	$(INSTALL_DIR) $(1)/usr/bin
-	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/bin/easytier-core $(1)/usr/bin/
-	$(INSTALL_DIR) $(1)/etc/config
-	$(INSTALL_CONF) ./files/etc/config/easytier $(1)/etc/config/easytier
-	$(INSTALL_DIR) $(1)/etc/init.d
-	$(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
+        $(INSTALL_DIR) $(1)/usr/bin
+        $(INSTALL_BIN) $(PKG_INSTALL_DIR)/bin/easytier-core $(1)/usr/bin/
+        $(INSTALL_DIR) $(1)/etc/config
+        $(INSTALL_CONF) ./files/etc/config/easytier $(1)/etc/config/easytier
+        $(INSTALL_DIR) $(1)/etc/init.d
+        $(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
 endef
 
 define Package/easytier/install
-	$(INSTALL_DIR) $(1)/usr/bin
-	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/bin/easytier-core $(1)/usr/bin/
-	$(INSTALL_DIR) $(1)/etc/config
-	$(INSTALL_CONF) ./files/etc/config/easytier $(1)/etc/config/easytier
-	$(INSTALL_DIR) $(1)/etc/init.d
-	$(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
+        $(INSTALL_DIR) $(1)/usr/bin
+        $(INSTALL_BIN) $(PKG_INSTALL_DIR)/bin/easytier-core $(1)/usr/bin/
+        $(INSTALL_DIR) $(1)/etc/config
+        $(INSTALL_CONF) ./files/etc/config/easytier $(1)/etc/config/easytier
+        $(INSTALL_DIR) $(1)/etc/init.d
+        $(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
 endef
 
 $(eval $(call BuildPackage,easytier-lite))
