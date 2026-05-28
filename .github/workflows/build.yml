@@ -107,10 +107,11 @@ jobs:
                 package/easytier/Makefile
             fi
 
-            # Configure cargo cross-compiler linker for all targets
-            # (OpenWrt uses musl even on x86_64, so the system linker won't work)
+            # Configure cargo cross-compiler linker
+            # Use readlink -f to convert relative path to absolute, because cargo
+            # resolves relative paths from $HOME, not the SDK directory.
             local LINKER
-            LINKER=$(find staging_dir/toolchain* -name '*-gcc' -type f | head -1)
+            LINKER=$(readlink -f $(find staging_dir/toolchain* -name '*-gcc' -type f | head -1))
             if [ -n "$LINKER" ]; then
               mkdir -p "$HOME/.cargo"
               printf '[target.%s]\nlinker = "%s"\n' "$CARGO_TARGET" "$LINKER" > "$HOME/.cargo/config.toml"
