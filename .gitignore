@@ -36,6 +36,7 @@ download/
 luci_*.json
 official_docs.json
 easytier_config_docs.json
+worklog.md
 
 # Upload staging
 upload/

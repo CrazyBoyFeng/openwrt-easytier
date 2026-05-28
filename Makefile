@@ -73,16 +73,10 @@ ifeq ($(BUILD_VARIANT),full)
 endif
 
 # Derive the Rust/cargo target triple from OpenWrt's TARGET_CC.
-# TARGET_CC already contains the correct architecture prefix
-# (e.g. mipsel-openwrt-linux-musl-gcc, x86_64-openwrt-linux-musl-gcc)
-# and reliably distinguishes mips from mipsel (unlike ARCH which is
-# just "mips" for both).  Order matters: mipsel must come before mips.
-CARGO_TARGET:=$(shell echo $(TARGET_CC) | sed \
-        -e 's/.*aarch64-.*/aarch64-unknown-linux-gnu/' \
-        -e 's/.*armv7-.*/armv7-unknown-linux-gnueabihf/' \
-        -e 's/.*x86_64-.*/x86_64-unknown-linux-gnu/' \
-        -e 's/.*mipsel-.*/mipsel-unknown-linux-gnu/' \
-        -e 's/.*mips-.*/mips-unknown-linux-gnu/')
+# Converts the OpenWrt toolchain triplet to the Rust equivalent:
+#   {arch}-openwrt-linux-{abi}-gcc  →  {arch}-unknown-linux-{abi}
+# This works for any architecture / ABI that OpenWrt supports.
+CARGO_TARGET:=$(shell echo $(TARGET_CC) | sed 's/-openwrt-/-unknown-/;s/-gcc$$//')
 
 define Build/Compile
         $(MAKE_VARS) \

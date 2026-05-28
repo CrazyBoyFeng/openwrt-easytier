@@ -15,13 +15,13 @@ jobs:
         include:
           - target: 'x86/64'
             slug: 'x86-64'
-            cargo_target: 'x86_64-unknown-linux-gnu'
+            cargo_target: 'x86_64-unknown-linux-musl'
           - target: 'mediatek/filogic'
             slug: 'mediatek-filogic'
-            cargo_target: 'aarch64-unknown-linux-gnu'
+            cargo_target: 'aarch64-unknown-linux-musl'
           - target: 'ramips/mt7621'
             slug: 'ramips-mt7621'
-            cargo_target: 'mipsel-unknown-linux-gnu'
+            cargo_target: 'mipsel-unknown-linux-musl'
             build_std: true
     runs-on: ubuntu-latest
     timeout-minutes: 360
