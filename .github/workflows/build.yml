@@ -87,9 +87,10 @@ jobs:
             sed -i 's/rust\/host protobuf\/host //' package/easytier/Makefile
             sed -i 's|PROTOC=\$(STAGING_DIR_HOSTPKG)/bin/protoc|PROTOC=/usr/bin/protoc|' package/easytier/Makefile
 
-            # For targets without prebuilt std (e.g. mipsel), compile std from source
+            # For targets without prebuilt std (e.g. mipsel), replace
+            # cargo install with cargo build -Zbuild-std
             if [ "${{ matrix.build_std }}" = "true" ]; then
-              sed -i 's/^CARGO_EXTRA_FLAGS:=/CARGO_EXTRA_FLAGS:=-Z build-std/' package/easytier/Makefile
+              sed -i 's|Build/Compile=\$(call Build/Compile/Cargo,easytier)|Build/Compile=$(CARGO_PKG_VARS) cargo -Z build-std build -v --manifest-path $(PKG_BUILD_DIR)/easytier/Cargo.toml -p easytier $(if $(strip $(RUST_PKG_FEATURES)),--features "$(strip $(RUST_PKG_FEATURES))") $(CARGO_PKG_ARGS) \&\& mkdir -p $(PKG_INSTALL_DIR)/bin \&\& cp $(PKG_BUILD_DIR)/target/$(RUSTC_TARGET_ARCH)/$(CARGO_PKG_PROFILE)/easytier-core $(PKG_INSTALL_DIR)/bin/|' package/easytier/Makefile
             fi
 
             # Select packages

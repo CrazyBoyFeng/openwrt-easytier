@@ -72,27 +72,12 @@ define Package/easytier/description
 endef
 
 # ============ Build/Compile ============
-# Extra cargo flags (CI injects "-Z build-std" for targets without prebuilt std)
-CARGO_EXTRA_FLAGS:=
-
 ifeq ($(BUILD_VARIANT),lite)
   RUST_PKG_FEATURES:=tun,magic-dns,quic,kcp,websocket,faketcp,zstd,aes-gcm
 endif
 
-# Use cargo build instead of cargo install to support -Z build-std.
-# rust-package.mk still provides CARGO_PKG_VARS, RUSTC_TARGET_ARCH, etc.
-define Build/Compile
-        $(CARGO_PKG_VARS) \
-        cargo $(CARGO_EXTRA_FLAGS) build -v \
-                --profile $(CARGO_PKG_PROFILE) \
-                --manifest-path $(PKG_BUILD_DIR)/easytier/Cargo.toml \
-                -p easytier \
-                $(if $(strip $(RUST_PKG_FEATURES)),--features "$(strip $(RUST_PKG_FEATURES))") \
-                $(CARGO_PKG_ARGS)
-        mkdir -p $(PKG_INSTALL_DIR)/bin
-        cp $(PKG_BUILD_DIR)/target/$(RUSTC_TARGET_ARCH)/$(CARGO_PKG_PROFILE)/easytier-core \
-                $(PKG_INSTALL_DIR)/bin/
-endef
+# easytier is a workspace member, pass subdirectory path to cargo
+Build/Compile=$(call Build/Compile/Cargo,easytier)
 
 # ============ Install ============
 define Package/easytier-lite/install
