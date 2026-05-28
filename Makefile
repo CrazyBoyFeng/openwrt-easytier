@@ -25,6 +25,11 @@ include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk
 # prost-build needs protoc on the host
 CARGO_PKG_VARS += PROTOC=$(STAGING_DIR_HOSTPKG)/bin/protoc
 
+# Disable --locked: the codeload tarball may have a Cargo.lock that
+# doesn't strictly match the resolved dependencies, causing
+# cargo install to fail with exit code 2.
+RUST_PKG_LOCKED:=0
+
 # ============ common ============
 define Package/easytier/Default
   SECTION:=net
@@ -79,7 +84,14 @@ endif
 # easytier is a workspace member, pass subdirectory path to cargo
 Build/Compile=$(call Build/Compile/Cargo,easytier)
 
-# ============ Install ============
+# Use RustBinPackage to auto-install all binaries from cargo install output.
+# This must come BEFORE BuildPackage eval so the install rule is set first.
+# Then we override install to add config + init script (RustBinPackage's install
+# would only copy bin/* — our override replaces it entirely, so we include
+# the bin copy manually).
+$(eval $(call RustBinPackage,easytier-lite))
+$(eval $(call RustBinPackage,easytier))
+
 define Package/easytier-lite/install
         $(INSTALL_DIR) $(1)/usr/bin
         $(INSTALL_BIN) $(PKG_INSTALL_DIR)/bin/easytier-core $(1)/usr/bin/
