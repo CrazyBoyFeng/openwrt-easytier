@@ -12,6 +12,9 @@ PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
 PKG_SOURCE_URL:=https://codeload.github.com/EasyTier/EasyTier/tar.gz/v$(PKG_VERSION)?
 PKG_HASH:=352c0866da709415a837405a6ce4f51b8dfae27e5d5c1da1fb4d8f7338e46795
 
+# codeload tarball top-level dir is EasyTier-x.y.z (uppercase)
+PKG_SOURCE_SUBDIR:=EasyTier-$(PKG_VERSION)
+
 PKG_MAINTAINER:=CrazyBoyFeng
 PKG_LICENSE:=Apache-2.0
 PKG_LICENSE_FILES:=LICENSE
