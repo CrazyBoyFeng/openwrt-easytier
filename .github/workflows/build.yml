@@ -21,10 +21,13 @@ jobs:
         include:
           - target: 'x86/64'
             slug: 'x86-64'
+            rust_target: 'x86_64-unknown-linux-musl'
           - target: 'mediatek/filogic'
             slug: 'mediatek-filogic'
+            rust_target: 'aarch64-unknown-linux-musl'
           - target: 'ramips/mt7621'
             slug: 'ramips-mt7621'
+            rust_target: 'mipsel-unknown-linux-musl'
             build_std: true
     runs-on: ubuntu-latest
     timeout-minutes: 360
@@ -45,6 +48,7 @@ jobs:
             # Stable with prebuilt std
             rustup default stable
           fi
+          rustup target add "${{ matrix.rust_target }}"
 
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
@@ -90,13 +94,22 @@ jobs:
 
             # Use pre-installed rustup toolchain and system protoc instead of
             # building rust/host and protobuf/host from source (much faster).
-            sed -i 's/rust\/host protobuf\/host //' package/easytier/Makefile
+            # NOTE: no trailing space in the sed pattern — the Makefile line
+            # ends with "protobuf/host" followed by a newline, not a space.
+            sed -i 's/rust\/host protobuf\/host//' package/easytier/Makefile
             sed -i 's|PROTOC=\$(STAGING_DIR_HOSTPKG)/bin/protoc|PROTOC=/usr/bin/protoc|' package/easytier/Makefile
 
-            # For targets without prebuilt std (e.g. mipsel), replace
-            # cargo install with cargo build -Zbuild-std
+            # Replace cargo install (from Build/Compile/Cargo) with direct
+            # cargo build.  This avoids needing rust/host to be compiled from
+            # source (~14 GB, ~1 h).  rust-package.mk still provides the
+            # cross-compilation env vars (CARGO_PKG_VARS) and target/profile
+            # variables (RUSTC_TARGET_ARCH, CARGO_PKG_PROFILE).
             if [ "${{ matrix.build_std }}" = "true" ]; then
-              sed -i 's|Build/Compile=\$(call Build/Compile/Cargo,easytier)|Build/Compile=$(CARGO_PKG_VARS) cargo -Z build-std build -v --manifest-path $(PKG_BUILD_DIR)/easytier/Cargo.toml -p easytier $(if $(strip $(RUST_PKG_FEATURES)),--features "$(strip $(RUST_PKG_FEATURES))") $(CARGO_PKG_ARGS) \&\& mkdir -p $(PKG_INSTALL_DIR)/bin \&\& cp $(PKG_BUILD_DIR)/target/$(RUSTC_TARGET_ARCH)/$(CARGO_PKG_PROFILE)/easytier-core $(PKG_INSTALL_DIR)/bin/|' package/easytier/Makefile
+              # mipsel: build std from source via -Zbuild-std
+              sed -i 's|Build/Compile=\$(call Build/Compile/Cargo,easytier)|Build/Compile=$(CARGO_PKG_VARS) cargo -Z build-std build -v --manifest-path $(PKG_BUILD_DIR)/easytier/Cargo.toml -p easytier --profile $(CARGO_PKG_PROFILE) $(if $(strip $(RUST_PKG_FEATURES)),--features "$(strip $(RUST_PKG_FEATURES))") $(CARGO_PKG_ARGS) \&\& mkdir -p $(PKG_INSTALL_DIR)/bin \&\& cp $(PKG_BUILD_DIR)/target/$(RUSTC_TARGET_ARCH)/$(CARGO_PKG_PROFILE)/easytier-core $(PKG_INSTALL_DIR)/bin/|' package/easytier/Makefile
+            else
+              # targets with prebuilt std: use regular cargo build
+              sed -i 's|Build/Compile=\$(call Build/Compile/Cargo,easytier)|Build/Compile=$(CARGO_PKG_VARS) cargo build -v --manifest-path $(PKG_BUILD_DIR)/easytier/Cargo.toml -p easytier --profile $(CARGO_PKG_PROFILE) $(if $(strip $(RUST_PKG_FEATURES)),--features "$(strip $(RUST_PKG_FEATURES))") $(CARGO_PKG_ARGS) \&\& mkdir -p $(PKG_INSTALL_DIR)/bin \&\& cp $(PKG_BUILD_DIR)/target/$(RUSTC_TARGET_ARCH)/$(CARGO_PKG_PROFILE)/easytier-core $(PKG_INSTALL_DIR)/bin/|' package/easytier/Makefile
             fi
 
             # Select packages
