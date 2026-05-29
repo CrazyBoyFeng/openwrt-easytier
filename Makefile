@@ -31,7 +31,7 @@ include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk
 CARGO_PKG_VARS += PROTOC=$(STAGING_DIR_HOSTPKG)/bin/protoc
 # kcp-sys uses bindgen for FFI bindings; point it at the target sysroot
 # so it can find the correct libc headers during cross-compilation.
-CARGO_PKG_VARS += BINDGEN_EXTRA_CLANG_ARGS=-I$(STAGING_DIR)/usr/include
+CARGO_PKG_VARS += BINDGEN_EXTRA_CLANG_ARGS=--sysroot=$(STAGING_DIR)
 
 # Disable --locked: the codeload tarball may have a Cargo.lock that
 # doesn't strictly match the resolved dependencies, causing
