@@ -29,6 +29,9 @@ include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk
 
 # prost-build needs protoc on the host
 CARGO_PKG_VARS += PROTOC=$(STAGING_DIR_HOSTPKG)/bin/protoc
+# kcp-sys uses bindgen for FFI bindings; point it at the target sysroot
+# so it can find the correct libc headers during cross-compilation.
+CARGO_PKG_VARS += BINDGEN_EXTRA_CLANG_ARGS=-I$(STAGING_DIR)/usr/include
 
 # Disable --locked: the codeload tarball may have a Cargo.lock that
 # doesn't strictly match the resolved dependencies, causing
@@ -56,7 +59,6 @@ define Package/easytier-lite
   $(call Package/easytier/Default)
   TITLE+= (lite build)
   VARIANT:=lite
-  CONFLICTS:=easytier
 endef
 
 define Package/easytier-lite/description
@@ -71,7 +73,6 @@ define Package/easytier
   $(call Package/easytier/Default)
   TITLE+= (full build)
   VARIANT:=full
-  CONFLICTS:=easytier-lite
 endef
 
 define Package/easytier/description

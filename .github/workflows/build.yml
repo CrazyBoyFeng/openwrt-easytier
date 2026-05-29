@@ -54,7 +54,7 @@ jobs:
           fi
 
       - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler clang libclang-dev
 
       - name: Build packages
         timeout-minutes: 330
