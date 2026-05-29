@@ -13,6 +13,8 @@ PKG_SOURCE_URL:=https://codeload.github.com/EasyTier/EasyTier/tar.gz/v$(PKG_VERS
 PKG_HASH:=352c0866da709415a837405a6ce4f51b8dfae27e5d5c1da1fb4d8f7338e46795
 
 # codeload tarball top-level dir is EasyTier-x.y.z (uppercase)
+# NOTE: PKG_SOURCE_SUBDIR is not honored by SDK 23.05 build variants,
+# so Build/Prepare is overridden to use --strip-components=1.
 PKG_SOURCE_SUBDIR:=EasyTier-$(PKG_VERSION)
 
 PKG_MAINTAINER:=CrazyBoyFeng
@@ -86,6 +88,19 @@ endif
 
 # easytier is a workspace member, pass subdirectory path to cargo
 Build/Compile=$(call Build/Compile/Cargo,easytier)
+
+# Override prepare to handle case-sensitive directory name mismatch.
+# The codeload tarball top-level directory is EasyTier-x.y.z (uppercase E)
+# but PKG_BUILD_DIR uses lowercase easytier-x.y.z (based on PKG_NAME).
+# SDK 24.10+ honors PKG_SOURCE_SUBDIR, but SDK 23.05 build variants don't.
+# Use --strip-components=1 to strip the uppercase prefix and extract
+# directly into PKG_BUILD_DIR, so patches can find files.
+define Build/Prepare
+	rm -rf $(PKG_BUILD_DIR)
+	mkdir -p $(PKG_BUILD_DIR)
+	gzip -dc $(DL_DIR)/$(PKG_SOURCE) | tar -C $(PKG_BUILD_DIR) --strip-components=1 -xf -
+	$(Build/Patch/Default)
+endef
 
 # Use RustBinPackage to auto-install all binaries from cargo install output.
 # This must come BEFORE BuildPackage eval so the install rule is set first.

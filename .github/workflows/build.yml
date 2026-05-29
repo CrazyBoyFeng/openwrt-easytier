@@ -44,11 +44,14 @@ jobs:
             # Nightly + rust-src for -Zbuild-std (targets without prebuilt std)
             rustup default nightly
             rustup component add rust-src
+            # Skip rustup target add: -Zbuild-std builds std from source,
+            # and nightly no longer ships prebuilt std for tier-3 targets
+            # like mipsel-unknown-linux-musl (causes "no prebuilt artifacts").
           else
             # Stable with prebuilt std
             rustup default stable
+            rustup target add "${{ matrix.rust_target }}"
           fi
-          rustup target add "${{ matrix.rust_target }}"
 
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
