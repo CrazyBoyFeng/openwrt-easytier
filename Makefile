@@ -99,22 +99,22 @@ Build/Compile=$(call Build/Compile/Cargo,easytier)
 # Use --strip-components=1 to strip the uppercase prefix and extract
 # directly into PKG_BUILD_DIR, so patches can find files.
 define Build/Prepare
-        rm -rf $(PKG_BUILD_DIR)
-        mkdir -p $(PKG_BUILD_DIR)
-        gzip -dc $(DL_DIR)/$(PKG_SOURCE) | tar -C $(PKG_BUILD_DIR) --strip-components=1 -xf -
-        $(Build/Patch/Default)
+	rm -rf $(PKG_BUILD_DIR)
+	mkdir -p $(PKG_BUILD_DIR)
+	gzip -dc $(DL_DIR)/$(PKG_SOURCE) | tar -C $(PKG_BUILD_DIR) --strip-components=1 -xf -
+	$(Build/Patch/Default)
 endef
 
 # Define install for easytier (full).  easytier-lite shares the same
 # install via a variable alias (jq-style).  RustBinPackage uses ifndef, so
 # defining install here prevents it from generating a duplicate default rule.
 define Package/easytier/install
-        $(INSTALL_DIR) $(1)/usr/bin
-        $(INSTALL_BIN) $(PKG_INSTALL_DIR)/bin/easytier-core $(1)/usr/bin/
-        $(INSTALL_DIR) $(1)/etc/config
-        $(INSTALL_CONF) ./files/etc/config/easytier $(1)/etc/config/easytier
-        $(INSTALL_DIR) $(1)/etc/init.d
-        $(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
+	$(INSTALL_DIR) $(1)/usr/bin
+	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/bin/easytier-core $(1)/usr/bin/
+	$(INSTALL_DIR) $(1)/etc/config
+	$(INSTALL_CONF) ./files/etc/config/easytier $(1)/etc/config/easytier
+	$(INSTALL_DIR) $(1)/etc/init.d
+	$(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
 endef
 
 Package/easytier-lite/install = $(Package/easytier/install)
