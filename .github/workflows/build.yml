@@ -101,6 +101,17 @@ jobs:
             # ends with "protobuf/host" followed by a newline, not a space.
             sed -i 's/rust\/host protobuf\/host//' package/easytier/Makefile
             sed -i 's|PROTOC=\$(STAGING_DIR_HOSTPKG)/bin/protoc|PROTOC=/usr/bin/protoc|' package/easytier/Makefile
+            # Fix bindgen for cross-compilation: the default Makefile sets
+            # BINDGEN_EXTRA_CLANG_ARGS=--sysroot=$(STAGING_DIR) which points to the
+            # target staging dir (no libc headers). Override it to use the toolchain
+            # staging dir's usr/include which contains musl/glibc headers.
+            TOOLCHAIN_INC=$(ls -d "$DIR"/staging_dir/toolchain-*/usr/include 2>/dev/null | head -1)
+            if [ -n "$TOOLCHAIN_INC" ]; then
+              echo "Overriding BINDGEN_EXTRA_CLANG_ARGS with toolchain include: $TOOLCHAIN_INC"
+              sed -i "s|BINDGEN_EXTRA_CLANG_ARGS=.*|BINDGEN_EXTRA_CLANG_ARGS=\"-nostdinc -I${TOOLCHAIN_INC}\"|" package/easytier/Makefile
+            else
+              echo "WARNING: toolchain include dir not found, bindgen may fail on cross-compile targets"
+            fi
 
             # SDK builds: BINDGEN needs cross-compilation target headers from the
             # TOOLCHAIN staging dir, not the TARGET staging dir.  Also add -nostdinc
