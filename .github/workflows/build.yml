@@ -68,9 +68,16 @@ jobs:
             local TAR_EXT="$3"
 
             echo "=== Downloading $SDK_VER SDK ($PKG_FMT) ==="
-            local INDEX="https://downloads.openwrt.org/releases/$SDK_VER/targets/${{ matrix.target }}/"
-            local FILE
-            FILE=$(curl -sL "$INDEX" | grep -o "openwrt-sdk-$SDK_VER-${SLUG}[^\"']*\.tar\.${TAR_EXT}" | head -1)
+            local INDEX FILE PAT
+            if [ "$SDK_VER" = "snapshot" ]; then
+              INDEX="https://downloads.openwrt.org/snapshots/targets/${{ matrix.target }}/"
+              PAT="openwrt-sdk-${SLUG}[^\"']*\.tar\.${TAR_EXT}"
+            else
+              INDEX="https://downloads.openwrt.org/releases/$SDK_VER/targets/${{ matrix.target }}/"
+              PAT="openwrt-sdk-$SDK_VER-${SLUG}[^\"']*\.tar\.${TAR_EXT}"
+            fi
+
+            FILE=$(curl -sL "$INDEX" | grep -o "$PAT" | head -1)
             if [ -z "$FILE" ]; then
               echo "ERROR: SDK file not found for $SDK_VER"
               return 1
@@ -89,7 +96,13 @@ jobs:
 
             echo "=== Configuring $SDK_VER build ==="
             ./scripts/feeds update -a
-            ./scripts/feeds install -a
+            # Do NOT use 'feeds install -a'.  That makes ALL feed packages
+            # available, causing make defconfig to enable hundreds of
+            # unrelated packages (firmware, kernel modules, etc.) by
+            # default and build them — wasting CI time.  We only need
+            # our custom package (copied below) and base SDK packages
+            # (kernel, kmod-tun).  rust-package.mk is included via
+            # direct path and does not require feeds install.
 
             # Copy package source
             mkdir -p package/easytier
@@ -141,9 +154,8 @@ jobs:
             make package/easytier/compile V=s || make package/easytier/compile V=s
 
             # Collect artifacts — only easytier packages.
-            # NOTE: SDK 24.10 still produces .ipk files (ipkg-build is used
-            # even though the runtime package manager is apk), so we match
-            # by package NAME not by extension.
+            # Match by package NAME, not extension — SDKs may produce
+            # .ipk or .apk depending on version.
             mkdir -p "$WORKSPACE/output/$SDK_VER"
             find bin/packages bin/targets -name 'easytier*' -exec cp {} "$WORKSPACE/output/$SDK_VER/" \;
 
@@ -153,7 +165,7 @@ jobs:
           }
 
           build_sdk "23.05.6" "ipk" "xz"
-          build_sdk "24.10.6" "apk" "zst"
+          build_sdk "snapshot" "apk" "zst"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
