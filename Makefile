@@ -105,23 +105,9 @@ define Build/Prepare
 	$(Build/Patch/Default)
 endef
 
-# Use RustBinPackage to auto-install all binaries from cargo install output.
-# This must come BEFORE BuildPackage eval so the install rule is set first.
-# Then we override install to add config + init script (RustBinPackage's install
-# would only copy bin/* — our override replaces it entirely, so we include
-# the bin copy manually).
-$(eval $(call RustBinPackage,easytier-lite))
-$(eval $(call RustBinPackage,easytier))
-
-define Package/easytier-lite/install
-	$(INSTALL_DIR) $(1)/usr/bin
-	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/bin/easytier-core $(1)/usr/bin/
-	$(INSTALL_DIR) $(1)/etc/config
-	$(INSTALL_CONF) ./files/etc/config/easytier $(1)/etc/config/easytier
-	$(INSTALL_DIR) $(1)/etc/init.d
-	$(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
-endef
-
+# Define install for easytier (full).  easytier-lite shares the same
+# install via a variable alias (jq-style).  RustBinPackage uses ifndef, so
+# defining install here prevents it from generating a duplicate default rule.
 define Package/easytier/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/bin/easytier-core $(1)/usr/bin/
@@ -130,6 +116,11 @@ define Package/easytier/install
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
 endef
+
+Package/easytier-lite/install = $(Package/easytier/install)
+
+$(eval $(call RustBinPackage,easytier-lite))
+$(eval $(call RustBinPackage,easytier))
 
 $(eval $(call BuildPackage,easytier-lite))
 $(eval $(call BuildPackage,easytier))
