@@ -140,9 +140,12 @@ jobs:
             echo "=== Building packages ($PKG_FMT) ==="
             make package/easytier/compile V=s || make package/easytier/compile V=s
 
-            # Collect artifacts
-            mkdir -p "$WORKSPACE/output/$PKG_FMT"
-            find bin/packages -name "*.${PKG_FMT}" -exec cp {} "$WORKSPACE/output/$PKG_FMT/" \;
+            # Collect artifacts — only easytier packages.
+            # NOTE: SDK 24.10 still produces .ipk files (ipkg-build is used
+            # even though the runtime package manager is apk), so we match
+            # by package NAME not by extension.
+            mkdir -p "$WORKSPACE/output/$SDK_VER"
+            find bin/packages bin/targets -name 'easytier*' -exec cp {} "$WORKSPACE/output/$SDK_VER/" \;
 
             cd ..
             rm -rf "$DIR"
