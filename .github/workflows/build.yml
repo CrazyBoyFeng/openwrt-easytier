@@ -108,9 +108,12 @@ jobs:
             #   1. toolchain-*/include  — GCC wrapper layer (stddef.h, stdint.h, etc.)
             #   2. toolchain-*/usr/include — musl libc headers
             # Use 'ls -d' with a glob (more reliable than find -path in CI).
-            # NOTE: we already 'cd "$DIR"' above, so use relative path.
+            # IMPORTANT: Must use ABSOLUTE paths because cargo build scripts
+            # (e.g. kcp-sys) run in target/release/build/<crate-hash>/, NOT in
+            # the SDK root.  Relative paths would fail to resolve.
             TOOLCHAIN_DIR=$(ls -d staging_dir/toolchain-* 2>/dev/null | head -1)
             if [ -n "$TOOLCHAIN_DIR" ]; then
+              TOOLCHAIN_DIR="$(cd "$TOOLCHAIN_DIR" && pwd)"
               echo "Overriding BINDGEN_EXTRA_CLANG_ARGS with toolchain includes: $TOOLCHAIN_DIR"
               sed -i "s|BINDGEN_EXTRA_CLANG_ARGS=.*|BINDGEN_EXTRA_CLANG_ARGS=\"-nostdinc -I${TOOLCHAIN_DIR}/include -I${TOOLCHAIN_DIR}/usr/include\"|" package/easytier/Makefile
             else
