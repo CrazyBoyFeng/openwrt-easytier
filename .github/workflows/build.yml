@@ -112,7 +112,7 @@ jobs:
             TOOLCHAIN_DIR=$(ls -d staging_dir/toolchain-* 2>/dev/null | head -1)
             if [ -n "$TOOLCHAIN_DIR" ]; then
               echo "Overriding BINDGEN_EXTRA_CLANG_ARGS with toolchain includes: $TOOLCHAIN_DIR"
-              sed -i "s|BINDGEN_EXTRA_CLANG_ARGS=.*|BINDGEN_EXTRA_CLANG_ARGS=-nostdinc,-I${TOOLCHAIN_DIR}/include,-I${TOOLCHAIN_DIR}/usr/include|" package/easytier/Makefile
+              sed -i "s|BINDGEN_EXTRA_CLANG_ARGS=.*|BINDGEN_EXTRA_CLANG_ARGS=\"-nostdinc -I${TOOLCHAIN_DIR}/include -I${TOOLCHAIN_DIR}/usr/include\"|" package/easytier/Makefile
             else
               echo "WARNING: toolchain dir not found, bindgen may fail on cross-compile targets"
             fi
