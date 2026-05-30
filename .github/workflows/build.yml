@@ -111,7 +111,7 @@ jobs:
             # with the deeply nested staging_dir layout).
             TOOLCHAIN_INC=$(ls -d "$DIR"/staging_dir/toolchain-*/usr/include 2>/dev/null | head -1)
             if [ -n "$TOOLCHAIN_INC" ]; then
-              sed -i "s|BINDGEN_EXTRA_CLANG_ARGS=.*|BINDGEN_EXTRA_CLANG_ARGS=-nostdinc,-I${TOOLCHAIN_INC}|" package/easytier/Makefile
+              sed -i "s|BINDGEN_EXTRA_CLANG_ARGS=.*|BINDGEN_EXTRA_CLANG_ARGS=\"-nostdinc -I${TOOLCHAIN_INC}\"|" package/easytier/Makefile
             fi
 
             # Replace cargo install (from Build/Compile/Cargo) with direct
