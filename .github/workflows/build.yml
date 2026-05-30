@@ -105,10 +105,11 @@ jobs:
             # SDK builds: BINDGEN needs cross-compilation target headers from the
             # TOOLCHAIN staging dir, not the TARGET staging dir.  Also add -nostdinc
             # to prevent clang from searching the host /usr/include (glibc headers
-            # conflict with the musl cross target).  Use commas to avoid shell
-            # word-splitting in the env-var assignment.
-            TOOLCHAIN_INC=$(find "$DIR/staging_dir" -maxdepth 3 -type d
-              -path "*/toolchain-*/usr/include" 2>/dev/null | head -1)
+            # conflict with the musl cross target).
+            # Use 'ls -d' with a glob rather than 'find -path' — the latter
+            # silently returned empty in CI (likely a find / -path interaction
+            # with the deeply nested staging_dir layout).
+            TOOLCHAIN_INC=$(ls -d "$DIR"/staging_dir/toolchain-*/usr/include 2>/dev/null | head -1)
             if [ -n "$TOOLCHAIN_INC" ]; then
               sed -i "s|BINDGEN_EXTRA_CLANG_ARGS=.*|BINDGEN_EXTRA_CLANG_ARGS=-nostdinc,-I${TOOLCHAIN_INC}|" package/easytier/Makefile
             fi
