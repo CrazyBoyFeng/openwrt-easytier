@@ -101,20 +101,20 @@ jobs:
             # ends with "protobuf/host" followed by a newline, not a space.
             sed -i 's/rust\/host protobuf\/host//' package/easytier/Makefile
             sed -i 's|PROTOC=\$(STAGING_DIR_HOSTPKG)/bin/protoc|PROTOC=/usr/bin/protoc|' package/easytier/Makefile
-            # Fix bindgen for cross-compilation: BINDGEN needs headers from the
-            # TOOLCHAIN staging dir, not the TARGET staging dir.  Also add -nostdinc
-            # to prevent clang from searching the host /usr/include (glibc headers
-            # conflict with the musl cross target).
-            # Use 'ls -d' with a glob rather than 'find -path' — the latter
-            # silently returned empty in CI (likely a find / -path interaction
-            # with the deeply nested staging_dir layout).
+            # SDK builds: BINDGEN needs cross-compilation target headers from the
+            # TOOLCHAIN staging dir.  -nostdinc prevents clang from searching
+            # the host /usr/include (glibc conflicts with musl cross target).
+            # We need two include dirs from the toolchain:
+            #   1. toolchain-*/include  — GCC wrapper layer (stddef.h, stdint.h, etc.)
+            #   2. toolchain-*/usr/include — musl libc headers
+            # Use 'ls -d' with a glob (more reliable than find -path in CI).
             # NOTE: we already 'cd "$DIR"' above, so use relative path.
-            TOOLCHAIN_INC=$(ls -d staging_dir/toolchain-*/usr/include 2>/dev/null | head -1)
-            if [ -n "$TOOLCHAIN_INC" ]; then
-              echo "Overriding BINDGEN_EXTRA_CLANG_ARGS with toolchain include: $TOOLCHAIN_INC"
-              sed -i "s|BINDGEN_EXTRA_CLANG_ARGS=.*|BINDGEN_EXTRA_CLANG_ARGS=\"-nostdinc -I${TOOLCHAIN_INC}\"|" package/easytier/Makefile
+            TOOLCHAIN_DIR=$(ls -d staging_dir/toolchain-* 2>/dev/null | head -1)
+            if [ -n "$TOOLCHAIN_DIR" ]; then
+              echo "Overriding BINDGEN_EXTRA_CLANG_ARGS with toolchain includes: $TOOLCHAIN_DIR"
+              sed -i "s|BINDGEN_EXTRA_CLANG_ARGS=.*|BINDGEN_EXTRA_CLANG_ARGS=-nostdinc,-I${TOOLCHAIN_DIR}/include,-I${TOOLCHAIN_DIR}/usr/include|" package/easytier/Makefile
             else
-              echo "WARNING: toolchain include dir not found, bindgen may fail on cross-compile targets"
+              echo "WARNING: toolchain dir not found, bindgen may fail on cross-compile targets"
             fi
 
             # Replace cargo install (from Build/Compile/Cargo) with direct
