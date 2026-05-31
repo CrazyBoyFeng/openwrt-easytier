@@ -77,13 +77,11 @@ jobs:
             local INDEX FILE PAT
             if [ "$SDK_VER" = "snapshot" ]; then
               INDEX="https://downloads.openwrt.org/snapshots/targets/${{ matrix.target }}/"
-              PAT="openwrt-sdk-${SLUG}[^\"]*'\.tar\.${TAR_EXT}"
             else
               INDEX="https://downloads.openwrt.org/releases/$SDK_VER/targets/${{ matrix.target }}/"
-              PAT="openwrt-sdk-$SDK_VER-${SLUG}[^\"]*'\.tar\.${TAR_EXT}"
             fi
 
-            FILE=$(curl -sL "$INDEX" | grep -o "$PAT" | head -1)
+            FILE=$(curl -sL "$INDEX" | grep -oE "openwrt-sdk-[0-9a-zA-Z._-]+-${SLUG}[0-9a-zA-Z._-]*\.tar\.${TAR_EXT}" | head -1)
             if [ -z "$FILE" ]; then
               echo "ERROR: SDK file not found for $SDK_VER"
               return 1
