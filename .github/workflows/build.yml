@@ -163,6 +163,8 @@ jobs:
             make defconfig
 
             echo "=== Building packages ($PKG_FMT) ==="
+            # Cross-crate link-time optimization for maximum size reduction
+            export CARGO_PROFILE_RELEASE_LTO=fat
             make package/easytier/compile V=s || make package/easytier/compile V=s
             make package/easytier-lite/compile V=s || make package/easytier-lite/compile V=s
 
