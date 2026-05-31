@@ -165,7 +165,7 @@ jobs:
           }
 
           build_sdk "23.05.6" "ipk" "xz"
-          build_sdk "snapshot" "apk" "zst"
+          build_sdk "25.12.4" "apk" "zst" "1"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
