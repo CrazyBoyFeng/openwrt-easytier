@@ -191,7 +191,7 @@ jobs:
                 bin=$(find "$d/ipkg-install/bin" "$d/target" -name "easytier-core" -type f 2>/dev/null | head -1)
                 if [ -n "$bin" ]; then
                   case "$(basename "$d")" in
-                    easytier-lite-*) variant="lite" ;;
+                    *lite*) variant="lite" ;;
                     *) variant="full" ;;
                   esac
                   cp "$bin" "$PREBUILT_DIR/$variant/"
