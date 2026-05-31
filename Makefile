@@ -100,7 +100,11 @@ export CARGO_PROFILE_RELEASE_STRIP=true
 
 # easytier is a workspace member, pass subdirectory path to cargo.
 # Only build easytier-core (skip easytier-cli which is not packaged).
+ifeq ($(BUILD_VARIANT),lite)
+Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core --no-default-features) && command -v upx >/dev/null 2>&1 && upx --best $(PKG_INSTALL_DIR)/bin/easytier-core || true
+else
 Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core) && command -v upx >/dev/null 2>&1 && upx --best $(PKG_INSTALL_DIR)/bin/easytier-core || true
+endif
 
 # Override prepare to handle case-sensitive directory name mismatch.
 # The codeload tarball top-level directory is EasyTier-x.y.z (uppercase E)
