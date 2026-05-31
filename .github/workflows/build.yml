@@ -167,8 +167,12 @@ jobs:
             echo "=== Building packages ($PKG_FMT) ==="
             # Cargo profile optimizations (LTO, codegen-units, panic, etc.)
             # are defined in Makefile via export, no need to set them here.
+            # BuildPackage generates compile targets for ALL variants
+            # (full + lite), so a single make package/easytier/compile
+            # builds both.  Separate easytier-lite/compile is wrong:
+            # easytier-lite has VARIANT:=lite so its target is
+            # package/easytier/lite/compile (not package/easytier-lite/compile).
             make package/easytier/compile V=s || make package/easytier/compile V=s
-            make package/easytier-lite/compile V=s || make package/easytier-lite/compile V=s
 
             # Collect artifacts — only easytier packages.
             # Match by package NAME, not extension — SDKs may produce
