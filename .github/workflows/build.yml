@@ -141,7 +141,10 @@ jobs:
               echo "=== Using prebuilt binaries (skipping cargo build) ==="
               # Replace Build/Compile with per-variant binary copy.
               # $(or $(BUILD_VARIANT),full) handles the default variant.
-              sed -i 's|Build/Compile=\$(call Build/Compile/Cargo,easytier)|Build/Compile=mkdir -p $(PKG_INSTALL_DIR)/bin \&\& cp '"$PREBUILT_DIR"'/$(or $(BUILD_VARIANT),full)/easytier-core $(PKG_INSTALL_DIR)/bin/|' package/easytier/Makefile
+              # Match the entire Build/Compile line (may have trailing UPX).
+              sed -i '/^Build/Compile=/c\Build/Compile=mkdir -p $(PKG_INSTALL_DIR)/bin \&\& cp '"$PREBUILT_DIR"'/$(or $(BUILD_VARIANT),full)/easytier-core $(PKG_INSTALL_DIR)/bin/' package/easytier/Makefile
+              # Also remove the UPX line that follows Build/Compile (if any).
+              sed -i '/command -v upx/d' package/easytier/Makefile
             else
               echo "=== Will compile Rust from source ==="
               # Replace cargo install (from Build/Compile/Cargo) with direct
@@ -149,12 +152,16 @@ jobs:
               # source (~14 GB, ~1 h).  rust-package.mk still provides the
               # cross-compilation env vars (CARGO_PKG_VARS) and target/profile
               # variables (RUSTC_TARGET_ARCH, CARGO_PKG_PROFILE).
+              # Cargo profile optimizations (LTO, codegen-units, etc.) and UPX
+              # are defined in Makefile; here we only override the build command.
               if [ "${{ matrix.build_std }}" = "true" ]; then
                 # mipsel: build std from source via -Zbuild-std
-                sed -i 's|Build/Compile=\$(call Build/Compile/Cargo,easytier)|Build/Compile=$(CARGO_PKG_VARS) cargo -Z build-std build -v --manifest-path $(PKG_BUILD_DIR)/easytier/Cargo.toml -p easytier --bin easytier-core --profile $(CARGO_PKG_PROFILE) $(if $(strip $(RUST_PKG_FEATURES)),--no-default-features --features "$(strip $(RUST_PKG_FEATURES))") \&\& upx --best $(PKG_BUILD_DIR)/target/$(RUSTC_TARGET_ARCH)/$(CARGO_PKG_PROFILE)/easytier-core \&\& mkdir -p $(PKG_INSTALL_DIR)/bin \&\& cp $(PKG_BUILD_DIR)/target/$(RUSTC_TARGET_ARCH)/$(CARGO_PKG_PROFILE)/easytier-core $(PKG_INSTALL_DIR)/bin/|' package/easytier/Makefile
+                sed -i '/^Build/Compile=/c\Build/Compile=$(CARGO_PKG_VARS) cargo -Z build-std build -v --manifest-path $(PKG_BUILD_DIR)/easytier/Cargo.toml -p easytier --bin easytier-core --profile $(CARGO_PKG_PROFILE) $(if $(strip $(RUST_PKG_FEATURES)),--no-default-features --features "$(strip $(RUST_PKG_FEATURES))") \&\& upx --best $(PKG_BUILD_DIR)/target/$(RUSTC_TARGET_ARCH)/$(CARGO_PKG_PROFILE)/easytier-core \&\& mkdir -p $(PKG_INSTALL_DIR)/bin \&\& cp $(PKG_BUILD_DIR)/target/$(RUSTC_TARGET_ARCH)/$(CARGO_PKG_PROFILE)/easytier-core $(PKG_INSTALL_DIR)/bin/' package/easytier/Makefile
+                sed -i '/command -v upx/d' package/easytier/Makefile
               else
                 # targets with prebuilt std: use regular cargo build
-                sed -i 's|Build/Compile=\$(call Build/Compile/Cargo,easytier)|Build/Compile=$(CARGO_PKG_VARS) cargo build -v --manifest-path $(PKG_BUILD_DIR)/easytier/Cargo.toml -p easytier --bin easytier-core --profile $(CARGO_PKG_PROFILE) $(if $(strip $(RUST_PKG_FEATURES)),--no-default-features --features "$(strip $(RUST_PKG_FEATURES))") \&\& upx --best $(PKG_BUILD_DIR)/target/$(RUSTC_TARGET_ARCH)/$(CARGO_PKG_PROFILE)/easytier-core \&\& mkdir -p $(PKG_INSTALL_DIR)/bin \&\& cp $(PKG_BUILD_DIR)/target/$(RUSTC_TARGET_ARCH)/$(CARGO_PKG_PROFILE)/easytier-core $(PKG_INSTALL_DIR)/bin/|' package/easytier/Makefile
+                sed -i '/^Build/Compile=/c\Build/Compile=$(CARGO_PKG_VARS) cargo build -v --manifest-path $(PKG_BUILD_DIR)/easytier/Cargo.toml -p easytier --bin easytier-core --profile $(CARGO_PKG_PROFILE) $(if $(strip $(RUST_PKG_FEATURES)),--no-default-features --features "$(strip $(RUST_PKG_FEATURES))") \&\& upx --best $(PKG_BUILD_DIR)/target/$(RUSTC_TARGET_ARCH)/$(CARGO_PKG_PROFILE)/easytier-core \&\& mkdir -p $(PKG_INSTALL_DIR)/bin \&\& cp $(PKG_BUILD_DIR)/target/$(RUSTC_TARGET_ARCH)/$(CARGO_PKG_PROFILE)/easytier-core $(PKG_INSTALL_DIR)/bin/' package/easytier/Makefile
+                sed -i '/command -v upx/d' package/easytier/Makefile
               fi
             fi
 
@@ -163,16 +170,8 @@ jobs:
             make defconfig
 
             echo "=== Building packages ($PKG_FMT) ==="
-            # Cross-crate link-time optimization for maximum size reduction
-            export CARGO_PROFILE_RELEASE_LTO=fat
-            # Single codegen unit allows better global optimization
-            export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
-            # Abort on panic removes unwinding tables, saving ~5-10% size
-            export CARGO_PROFILE_RELEASE_PANIC=abort
-            # Optimize for binary size; trade some runtime speed for smaller output
-            export CARGO_PROFILE_RELEASE_OPT_LEVEL=z
-            # Strip debug symbols to further reduce binary size before UPX
-            export CARGO_PROFILE_RELEASE_STRIP=true
+            # Cargo profile optimizations (LTO, codegen-units, panic, etc.)
+            # are defined in Makefile via export, no need to set them here.
             make package/easytier/compile V=s || make package/easytier/compile V=s
             make package/easytier-lite/compile V=s || make package/easytier-lite/compile V=s
 
