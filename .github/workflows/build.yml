@@ -165,6 +165,8 @@ jobs:
             echo "=== Building packages ($PKG_FMT) ==="
             # Cross-crate link-time optimization for maximum size reduction
             export CARGO_PROFILE_RELEASE_LTO=fat
+            # Single codegen unit allows better global optimization
+            export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
             make package/easytier/compile V=s || make package/easytier/compile V=s
             make package/easytier-lite/compile V=s || make package/easytier-lite/compile V=s
 
