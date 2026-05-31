@@ -54,7 +54,7 @@ jobs:
           fi
 
       - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler clang libclang-dev
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler clang libclang-dev zstd
 
       - name: Build packages
         timeout-minutes: 330
@@ -62,19 +62,25 @@ jobs:
           SLUG="${{ matrix.slug }}"
           WORKSPACE="$GITHUB_WORKSPACE"
 
+          # Directory to persist prebuilt binaries across SDK builds.
+          # The first SDK compiles Rust; the second SDK reuses these binaries
+          # to skip the ~40 min cargo build, cutting wall-clock time nearly in half.
+          PREBUILT_DIR="$WORKSPACE/.prebuilt"
+
           build_sdk() {
             local SDK_VER="$1"
             local PKG_FMT="$2"
             local TAR_EXT="$3"
+            local USE_PREBUILT="$4"
 
             echo "=== Downloading $SDK_VER SDK ($PKG_FMT) ==="
             local INDEX FILE PAT
             if [ "$SDK_VER" = "snapshot" ]; then
               INDEX="https://downloads.openwrt.org/snapshots/targets/${{ matrix.target }}/"
-              PAT="openwrt-sdk-${SLUG}[^\"']*\.tar\.${TAR_EXT}"
+              PAT="openwrt-sdk-${SLUG}[^\"]*'\.tar\.${TAR_EXT}"
             else
               INDEX="https://downloads.openwrt.org/releases/$SDK_VER/targets/${{ matrix.target }}/"
-              PAT="openwrt-sdk-$SDK_VER-${SLUG}[^\"']*\.tar\.${TAR_EXT}"
+              PAT="openwrt-sdk-$SDK_VER-${SLUG}[^\"]*'\.tar\.${TAR_EXT}"
             fi
 
             FILE=$(curl -sL "$INDEX" | grep -o "$PAT" | head -1)
@@ -110,17 +116,15 @@ jobs:
 
             # Use pre-installed rustup toolchain and system protoc instead of
             # building rust/host and protobuf/host from source (much faster).
-            # NOTE: no trailing space in the sed pattern — the Makefile line
-            # ends with "protobuf/host" followed by a newline, not a space.
-            sed -i 's/rust\/host protobuf\/host//' package/easytier/Makefile
+            sed -i 's/rust/host protobuf/host//' package/easytier/Makefile
             sed -i 's|PROTOC=\$(STAGING_DIR_HOSTPKG)/bin/protoc|PROTOC=/usr/bin/protoc|' package/easytier/Makefile
+
             # SDK builds: BINDGEN needs cross-compilation target headers from the
             # TOOLCHAIN staging dir.  -nostdinc prevents clang from searching
             # the host /usr/include (glibc conflicts with musl cross target).
             # We need two include dirs from the toolchain:
             #   1. toolchain-*/include  — GCC wrapper layer (stddef.h, stdint.h, etc.)
             #   2. toolchain-*/usr/include — musl libc headers
-            # Use 'ls -d' with a glob (more reliable than find -path in CI).
             # IMPORTANT: Must use ABSOLUTE paths because cargo build scripts
             # (e.g. kcp-sys) run in target/release/build/<crate-hash>/, NOT in
             # the SDK root.  Relative paths would fail to resolve.
@@ -133,17 +137,25 @@ jobs:
               echo "WARNING: toolchain dir not found, bindgen may fail on cross-compile targets"
             fi
 
-            # Replace cargo install (from Build/Compile/Cargo) with direct
-            # cargo build.  This avoids needing rust/host to be compiled from
-            # source (~14 GB, ~1 h).  rust-package.mk still provides the
-            # cross-compilation env vars (CARGO_PKG_VARS) and target/profile
-            # variables (RUSTC_TARGET_ARCH, CARGO_PKG_PROFILE).
-            if [ "${{ matrix.build_std }}" = "true" ]; then
-              # mipsel: build std from source via -Zbuild-std
-              sed -i 's|Build/Compile=\$(call Build/Compile/Cargo,easytier)|Build/Compile=$(CARGO_PKG_VARS) cargo -Z build-std build -v --manifest-path $(PKG_BUILD_DIR)/easytier/Cargo.toml -p easytier --profile $(CARGO_PKG_PROFILE) $(if $(strip $(RUST_PKG_FEATURES)),--features "$(strip $(RUST_PKG_FEATURES))") \&\& mkdir -p $(PKG_INSTALL_DIR)/bin \&\& cp $(PKG_BUILD_DIR)/target/$(RUSTC_TARGET_ARCH)/$(CARGO_PKG_PROFILE)/easytier-core $(PKG_INSTALL_DIR)/bin/|' package/easytier/Makefile
+            if [ "$USE_PREBUILT" = "1" ] && [ -d "$PREBUILT_DIR" ] && [ "$(ls -A "$PREBUILT_DIR")" ]; then
+              echo "=== Using prebuilt binaries (skipping cargo build) ==="
+              # Replace Build/Compile with per-variant binary copy.
+              # $(or $(BUILD_VARIANT),full) handles the default variant.
+              sed -i 's|Build/Compile=\$(call Build/Compile/Cargo,easytier)|Build/Compile=mkdir -p $(PKG_INSTALL_DIR)/bin \&\& cp '"$PREBUILT_DIR"'/$(or $(BUILD_VARIANT),full)/easytier-core $(PKG_INSTALL_DIR)/bin/|' package/easytier/Makefile
             else
-              # targets with prebuilt std: use regular cargo build
-              sed -i 's|Build/Compile=\$(call Build/Compile/Cargo,easytier)|Build/Compile=$(CARGO_PKG_VARS) cargo build -v --manifest-path $(PKG_BUILD_DIR)/easytier/Cargo.toml -p easytier --profile $(CARGO_PKG_PROFILE) $(if $(strip $(RUST_PKG_FEATURES)),--features "$(strip $(RUST_PKG_FEATURES))") \&\& mkdir -p $(PKG_INSTALL_DIR)/bin \&\& cp $(PKG_BUILD_DIR)/target/$(RUSTC_TARGET_ARCH)/$(CARGO_PKG_PROFILE)/easytier-core $(PKG_INSTALL_DIR)/bin/|' package/easytier/Makefile
+              echo "=== Will compile Rust from source ==="
+              # Replace cargo install (from Build/Compile/Cargo) with direct
+              # cargo build.  This avoids needing rust/host to be compiled from
+              # source (~14 GB, ~1 h).  rust-package.mk still provides the
+              # cross-compilation env vars (CARGO_PKG_VARS) and target/profile
+              # variables (RUSTC_TARGET_ARCH, CARGO_PKG_PROFILE).
+              if [ "${{ matrix.build_std }}" = "true" ]; then
+                # mipsel: build std from source via -Zbuild-std
+                sed -i 's|Build/Compile=\$(call Build/Compile/Cargo,easytier)|Build/Compile=$(CARGO_PKG_VARS) cargo -Z build-std build -v --manifest-path $(PKG_BUILD_DIR)/easytier/Cargo.toml -p easytier --profile $(CARGO_PKG_PROFILE) $(if $(strip $(RUST_PKG_FEATURES)),--no-default-features --features "$(strip $(RUST_PKG_FEATURES))") \&\& mkdir -p $(PKG_INSTALL_DIR)/bin \&\& cp $(PKG_BUILD_DIR)/target/$(RUSTC_TARGET_ARCH)/$(CARGO_PKG_PROFILE)/easytier-core $(PKG_INSTALL_DIR)/bin/|' package/easytier/Makefile
+              else
+                # targets with prebuilt std: use regular cargo build
+                sed -i 's|Build/Compile=\$(call Build/Compile/Cargo,easytier)|Build/Compile=$(CARGO_PKG_VARS) cargo build -v --manifest-path $(PKG_BUILD_DIR)/easytier/Cargo.toml -p easytier --profile $(CARGO_PKG_PROFILE) $(if $(strip $(RUST_PKG_FEATURES)),--no-default-features --features "$(strip $(RUST_PKG_FEATURES))") \&\& mkdir -p $(PKG_INSTALL_DIR)/bin \&\& cp $(PKG_BUILD_DIR)/target/$(RUSTC_TARGET_ARCH)/$(CARGO_PKG_PROFILE)/easytier-core $(PKG_INSTALL_DIR)/bin/|' package/easytier/Makefile
+              fi
             fi
 
             # Select packages
@@ -152,6 +164,7 @@ jobs:
 
             echo "=== Building packages ($PKG_FMT) ==="
             make package/easytier/compile V=s || make package/easytier/compile V=s
+            make package/easytier-lite/compile V=s || make package/easytier-lite/compile V=s
 
             # Collect artifacts — only easytier packages.
             # Match by package NAME, not extension — SDKs may produce
@@ -159,12 +172,32 @@ jobs:
             mkdir -p "$WORKSPACE/output/$SDK_VER"
             find bin/packages bin/targets -name 'easytier*' -exec cp {} "$WORKSPACE/output/$SDK_VER/" \;
 
+            # Save prebuilt binaries for the next SDK build (if this was
+            # a from-source build).  Save per-variant since full and lite
+            # produce different binaries after the --no-default-features fix.
+            if [ "$USE_PREBUILT" != "1" ]; then
+              mkdir -p "$PREBUILT_DIR/full" "$PREBUILT_DIR/lite"
+              for d in $(find build_dir/target-* -maxdepth 2 -type d -name 'easytier*'); do
+                bin=$(find "$d/target" -name "easytier-core" -type f 2>/dev/null | head -1)
+                if [ -n "$bin" ]; then
+                  case "$(basename "$d")" in
+                    easytier-lite-*) variant="lite" ;;
+                    *) variant="full" ;;
+                  esac
+                  cp "$bin" "$PREBUILT_DIR/$variant/"
+                  echo "Saved prebuilt $variant binary: $(ls -lh "$PREBUILT_DIR/$variant/easytier-core" | awk '{print $5}')"
+                fi
+              done
+            fi
+
             cd ..
             rm -rf "$DIR"
             echo "=== $SDK_VER ($PKG_FMT) done ==="
           }
 
-          build_sdk "23.05.6" "ipk" "xz"
+          # First SDK: compile Rust from source
+          build_sdk "23.05.6" "ipk" "xz" ""
+          # Second SDK: reuse prebuilt binaries, skip cargo build
           build_sdk "25.12.4" "apk" "zst" "1"
 
       - name: Upload artifacts
