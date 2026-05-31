@@ -89,8 +89,18 @@ ifeq ($(BUILD_VARIANT),lite)
   RUST_PKG_FEATURES:=tun,magic-dns,quic,kcp,websocket,faketcp,zstd,aes-gcm
 endif
 
-# easytier is a workspace member, pass subdirectory path to cargo
-Build/Compile=$(call Build/Compile/Cargo,easytier)
+# Cargo profile optimizations for minimum binary size.
+# These are standard cargo env vars read by the compiler;
+# they apply to both local SDK builds and CI.
+export CARGO_PROFILE_RELEASE_LTO=fat
+export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
+export CARGO_PROFILE_RELEASE_PANIC=abort
+export CARGO_PROFILE_RELEASE_OPT_LEVEL=z
+export CARGO_PROFILE_RELEASE_STRIP=true
+
+# easytier is a workspace member, pass subdirectory path to cargo.
+# Only build easytier-core (skip easytier-cli which is not packaged).
+Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core) && command -v upx >/dev/null 2>&1 && upx --best $(PKG_INSTALL_DIR)/bin/easytier-core || true
 
 # Override prepare to handle case-sensitive directory name mismatch.
 # The codeload tarball top-level directory is EasyTier-x.y.z (uppercase E)

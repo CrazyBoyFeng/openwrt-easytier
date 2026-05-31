@@ -139,10 +139,9 @@ jobs:
               echo "=== Using prebuilt binaries (skipping cargo build) ==="
               # Replace Build/Compile with per-variant binary copy.
               # $(or $(BUILD_VARIANT),full) handles the default variant.
-              # Match the entire Build/Compile line (may have trailing UPX).
+              # sed c\ replaces the entire line; the original line may
+              # contain UPX (appended via &&), which is discarded here.
               sed -i '/^Build/Compile=/c\Build/Compile=mkdir -p $(PKG_INSTALL_DIR)/bin \&\& cp '"$PREBUILT_DIR"'/$(or $(BUILD_VARIANT),full)/easytier-core $(PKG_INSTALL_DIR)/bin/' package/easytier/Makefile
-              # Also remove the UPX line that follows Build/Compile (if any).
-              sed -i '/command -v upx/d' package/easytier/Makefile
             else
               echo "=== Will compile Rust from source ==="
               # Replace cargo install (from Build/Compile/Cargo) with direct
@@ -155,11 +154,9 @@ jobs:
               if [ "${{ matrix.build_std }}" = "true" ]; then
                 # mipsel: build std from source via -Zbuild-std
                 sed -i '/^Build/Compile=/c\Build/Compile=$(CARGO_PKG_VARS) cargo -Z build-std build -v --manifest-path $(PKG_BUILD_DIR)/easytier/Cargo.toml -p easytier --bin easytier-core --profile $(CARGO_PKG_PROFILE) $(if $(strip $(RUST_PKG_FEATURES)),--no-default-features --features "$(strip $(RUST_PKG_FEATURES))") \&\& upx --best $(PKG_BUILD_DIR)/target/$(RUSTC_TARGET_ARCH)/$(CARGO_PKG_PROFILE)/easytier-core \&\& mkdir -p $(PKG_INSTALL_DIR)/bin \&\& cp $(PKG_BUILD_DIR)/target/$(RUSTC_TARGET_ARCH)/$(CARGO_PKG_PROFILE)/easytier-core $(PKG_INSTALL_DIR)/bin/' package/easytier/Makefile
-                sed -i '/command -v upx/d' package/easytier/Makefile
               else
                 # targets with prebuilt std: use regular cargo build
                 sed -i '/^Build/Compile=/c\Build/Compile=$(CARGO_PKG_VARS) cargo build -v --manifest-path $(PKG_BUILD_DIR)/easytier/Cargo.toml -p easytier --bin easytier-core --profile $(CARGO_PKG_PROFILE) $(if $(strip $(RUST_PKG_FEATURES)),--no-default-features --features "$(strip $(RUST_PKG_FEATURES))") \&\& upx --best $(PKG_BUILD_DIR)/target/$(RUSTC_TARGET_ARCH)/$(CARGO_PKG_PROFILE)/easytier-core \&\& mkdir -p $(PKG_INSTALL_DIR)/bin \&\& cp $(PKG_BUILD_DIR)/target/$(RUSTC_TARGET_ARCH)/$(CARGO_PKG_PROFILE)/easytier-core $(PKG_INSTALL_DIR)/bin/' package/easytier/Makefile
-                sed -i '/command -v upx/d' package/easytier/Makefile
               fi
             fi
 
