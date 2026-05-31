@@ -169,6 +169,10 @@ jobs:
             export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
             # Abort on panic removes unwinding tables, saving ~5-10% size
             export CARGO_PROFILE_RELEASE_PANIC=abort
+            # Optimize for binary size; trade some runtime speed for smaller output
+            export CARGO_PROFILE_RELEASE_OPT_LEVEL=z
+            # Strip debug symbols to further reduce binary size before UPX
+            export CARGO_PROFILE_RELEASE_STRIP=true
             make package/easytier/compile V=s || make package/easytier/compile V=s
             make package/easytier-lite/compile V=s || make package/easytier-lite/compile V=s
 
