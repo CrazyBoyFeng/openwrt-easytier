@@ -178,15 +178,17 @@ jobs:
             # Match by package NAME, not extension — SDKs may produce
             # .ipk or .apk depending on version.
             mkdir -p "$WORKSPACE/output/$SDK_VER"
-            find bin/packages bin/targets -name 'easytier*' -exec cp {} "$WORKSPACE/output/$SDK_VER/" \;
+            find bin/packages bin/targets -name 'easytier*' -exec cp {} "$WORKSPACE/output/$SDK_VER/" \; 2>/dev/null || true
 
             # Save prebuilt binaries for the next SDK build (if this was
             # a from-source build).  Save per-variant since full and lite
             # produce different binaries after the --no-default-features fix.
+            # Look in ipkg-install (used by cargo install via Build/Compile/Cargo)
+            # and also in cargo target/ output (used by CI's sed-replaced cargo build).
             if [ "$USE_PREBUILT" != "1" ]; then
               mkdir -p "$PREBUILT_DIR/full" "$PREBUILT_DIR/lite"
-              for d in $(find build_dir/target-* -maxdepth 2 -type d -name 'easytier*'); do
-                bin=$(find "$d/target" -name "easytier-core" -type f 2>/dev/null | head -1)
+              for d in $(find build_dir/target-* -maxdepth 2 -type d -name 'easytier*' 2>/dev/null); do
+                bin=$(find "$d/ipkg-install/bin" "$d/target" -name "easytier-core" -type f 2>/dev/null | head -1)
                 if [ -n "$bin" ]; then
                   case "$(basename "$d")" in
                     easytier-lite-*) variant="lite" ;;
