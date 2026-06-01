@@ -63,152 +63,168 @@ jobs:
           WORKSPACE="$GITHUB_WORKSPACE"
 
           # Directory to persist prebuilt binaries across SDK builds.
-          # The first SDK compiles Rust; the second SDK reuses these binaries
-          # to skip the ~40 min cargo build, cutting wall-clock time nearly in half.
           PREBUILT_DIR="$WORKSPACE/.prebuilt"
 
-          build_sdk() {
-            local SDK_VER="$1"
-            local PKG_FMT="$2"
-            local TAR_EXT="$3"
-            local USE_PREBUILT="$4"
+          # ============================================================
+          # Step 1: Build with 25.12.4 SDK — compile Rust + package .apk
+          # ============================================================
+          echo "=========================================="
+          echo "=== Step 1: 25.12.4 SDK (compile + .apk) ==="
+          echo "=========================================="
 
-            echo "=== Downloading $SDK_VER SDK ($PKG_FMT) ==="
-            local INDEX FILE PAT
-            if [ "$SDK_VER" = "snapshot" ]; then
-              INDEX="https://downloads.openwrt.org/snapshots/targets/${{ matrix.target }}/"
+          SDK_VER="25.12.4"
+          PKG_FMT="apk"
+          TAR_EXT="zst"
+          INDEX="https://downloads.openwrt.org/releases/$SDK_VER/targets/${{ matrix.target }}/"
+
+          echo "=== Downloading $SDK_VER SDK ($PKG_FMT) ==="
+          FILE=$(curl -sL "$INDEX" | grep -oE "openwrt-sdk-[0-9a-zA-Z._-]+-${SLUG}[0-9a-zA-Z._-]*\.tar\.${TAR_EXT}" | head -1)
+          if [ -z "$FILE" ]; then
+            echo "ERROR: SDK file not found for $SDK_VER"
+            exit 1
+          fi
+          DIR="${FILE%.tar.*}"
+
+          curl -L "${INDEX}${FILE}" -o "sdk.tar.${TAR_EXT}"
+          tar --zstd -xf "sdk.tar.${TAR_EXT}"
+          rm "sdk.tar.${TAR_EXT}"
+
+          cd "$DIR"
+
+          echo "=== Configuring $SDK_VER build ==="
+          ./scripts/feeds update -a
+          # Do NOT use 'feeds install -a'.  That makes ALL feed packages
+          # available, causing make defconfig to enable hundreds of
+          # unrelated packages (firmware, kernel modules, etc.) by
+          # default and build them — wasting CI time.  We only need
+          # our custom package (copied below) and base SDK packages
+          # (kernel, kmod-tun).  rust-package.mk is included via
+          # direct path and does not require feeds install.
+
+          # Copy package source (main Makefile for 25.12.4)
+          mkdir -p package/easytier
+          cp -r "$WORKSPACE/Makefile" "$WORKSPACE/patches" "$WORKSPACE/files" package/easytier/
+
+          # Use pre-installed rustup toolchain and system protoc instead of
+          # building rust/host and protobuf/host from source (much faster).
+          sed -i 's|rust/host protobuf/host||' package/easytier/Makefile
+          sed -i 's|PROTOC=\$(STAGING_DIR_HOSTPKG)/bin/protoc|PROTOC=/usr/bin/protoc|' package/easytier/Makefile
+
+          # BINDGEN_EXTRA_CLANG_ARGS is now correct in Makefile (uses
+          # $(TOOLCHAIN_DIR) with -nostdinc), no sed override needed.
+
+          # For mipsel (tier-3), set CARGO_BUILD_STD_FLAGS so Makefile's
+          # ifdef injects -Z build-std into Build/Compile/Cargo.
+          # NOTE: This ifdef is commented out in the current Makefile (25.12.4
+          # only), so CI must handle build-std via sed override instead.
+          if [ "${{ matrix.build_std }}" = "true" ]; then
+            echo "=== mipsel: injecting -Z build-std via sed ==="
+            sed -i 's|^Build/Compile=\$(call Build/Compile/Cargo,easytier,--bin easytier-core --no-default-features)|Build/Compile=$(CARGO_PKG_VARS) cargo -Z build-std install -v --profile $(CARGO_PKG_PROFILE) --features "$(strip $(RUST_PKG_FEATURES))" --root $(PKG_INSTALL_DIR) --path "$(PKG_BUILD_DIR)/easytier" --bin easytier-core \&\& (command -v upx >/dev/null 2>\&1 \&\& upx --lzma --best $(PKG_INSTALL_DIR)/bin/easytier-core || true)|' package/easytier/Makefile
+          fi
+
+          # Select packages
+          printf 'CONFIG_PACKAGE_easytier=y\nCONFIG_PACKAGE_easytier-lite=y\n' >> .config
+          make defconfig
+
+          echo "=== Building packages ($PKG_FMT) ==="
+          # BuildPackage generates compile targets for ALL variants
+          # (full + lite), so a single make package/easytier/compile
+          # builds both.  Separate easytier-lite/compile is wrong:
+          # easytier-lite has VARIANT:=lite so its target is
+          # package/easytier/lite/compile (not package/easytier-lite/compile).
+          make package/easytier/compile V=s || make package/easytier/compile V=s
+
+          # Collect artifacts — only easytier packages from bin/packages/.
+          mkdir -p "$WORKSPACE/output/$SDK_VER"
+          find bin/packages -type f -name 'easytier*' -exec cp {} "$WORKSPACE/output/$SDK_VER/" \; 2>/dev/null || true
+
+          # Save prebuilt binaries for the 23.05.6 legacy build.
+          # Save per-variant since full and lite produce different binaries.
+          #
+          # IMPORTANT: We cannot look in build_dir/*/easytier-*/target-$variant/
+          # because OpenWrt's post-build autoremove wipes the build dir
+          # (including cargo target/) after each variant is packaged.
+          # Extract directly from bin/packages/ apk files instead.
+          mkdir -p "$PREBUILT_DIR/full" "$PREBUILT_DIR/lite"
+          for variant in full lite; do
+            # Package names: "easytier" for full, "easytier-lite" for lite
+            pkg_name="easytier"
+            if [ "$variant" = "lite" ]; then pkg_name="easytier-lite"; fi
+            # Search in bin/packages/ only
+            pkg=$(find bin/packages -type f -name "${pkg_name}_*.${PKG_FMT}" 2>/dev/null | head -1)
+            if [ -n "$pkg" ]; then
+              # Extract easytier-core from the package.
+              # apk = tar.gz (OpenWrt apk mkpkg format)
+              tmp=$(mktemp -d)
+              tar xzf "$pkg" -C "$tmp" 2>/dev/null || true
+              bin=$(find "$tmp" -name "easytier-core" -type f 2>/dev/null | head -1)
+              if [ -n "$bin" ]; then
+                cp "$bin" "$PREBUILT_DIR/$variant/"
+                echo "Saved prebuilt $variant binary: $(ls -lh "$PREBUILT_DIR/$variant/easytier-core" | awk '{print $5}')"
+              else
+                echo "WARNING: easytier-core not found in $pkg"
+              fi
+              rm -rf "$tmp"
             else
-              INDEX="https://downloads.openwrt.org/releases/$SDK_VER/targets/${{ matrix.target }}/"
+              echo "WARNING: package for variant '$variant' not found in bin/packages/"
             fi
+          done
 
-            FILE=$(curl -sL "$INDEX" | grep -oE "openwrt-sdk-[0-9a-zA-Z._-]+-${SLUG}[0-9a-zA-Z._-]*\.tar\.${TAR_EXT}" | head -1)
-            if [ -z "$FILE" ]; then
-              echo "ERROR: SDK file not found for $SDK_VER"
-              return 1
-            fi
-            local DIR="${FILE%.tar.*}"
+          cd ..
+          rm -rf "$DIR"
+          echo "=== $SDK_VER ($PKG_FMT) done ==="
+
+          # ============================================================
+          # Step 2: Build with 23.05.6 SDK — package .ipk only (prebuilt)
+          # ============================================================
+          echo "=========================================="
+          echo "=== Step 2: 23.05.6 SDK (package .ipk) ==="
+          echo "=========================================="
+
+          SDK_VER="23.05.6"
+          PKG_FMT="ipk"
+          TAR_EXT="xz"
+          INDEX="https://downloads.openwrt.org/releases/$SDK_VER/targets/${{ matrix.target }}/"
+
+          echo "=== Downloading $SDK_VER SDK ($PKG_FMT) ==="
+          FILE=$(curl -sL "$INDEX" | grep -oE "openwrt-sdk-[0-9a-zA-Z._-]+-${SLUG}[0-9a-zA-Z._-]*\.tar\.${TAR_EXT}" | head -1)
+          if [ -z "$FILE" ]; then
+            echo "WARNING: SDK file not found for $SDK_VER, skipping legacy build"
+          else
+            DIR="${FILE%.tar.*}"
 
             curl -L "${INDEX}${FILE}" -o "sdk.tar.${TAR_EXT}"
-            if [ "$TAR_EXT" = "zst" ]; then
-              tar --zstd -xf "sdk.tar.${TAR_EXT}"
-            else
-              tar xJf "sdk.tar.${TAR_EXT}"
-            fi
+            tar xJf "sdk.tar.${TAR_EXT}"
             rm "sdk.tar.${TAR_EXT}"
 
             cd "$DIR"
 
             echo "=== Configuring $SDK_VER build ==="
             ./scripts/feeds update -a
-            # Do NOT use 'feeds install -a'.  That makes ALL feed packages
-            # available, causing make defconfig to enable hundreds of
-            # unrelated packages (firmware, kernel modules, etc.) by
-            # default and build them — wasting CI time.  We only need
-            # our custom package (copied below) and base SDK packages
-            # (kernel, kmod-tun).  rust-package.mk is included via
-            # direct path and does not require feeds install.
 
-            # Copy package source
+            # Copy Makefile.legacy (no rust-package.mk dependency) + files
             mkdir -p package/easytier
-            cp -r "$WORKSPACE/Makefile" "$WORKSPACE/patches" "$WORKSPACE/files" package/easytier/
-
-            # Use pre-installed rustup toolchain and system protoc instead of
-            # building rust/host and protobuf/host from source (much faster).
-            sed -i 's|rust/host protobuf/host||' package/easytier/Makefile
-            sed -i 's|PROTOC=\$(STAGING_DIR_HOSTPKG)/bin/protoc|PROTOC=/usr/bin/protoc|' package/easytier/Makefile
-
-            # BINDGEN_EXTRA_CLANG_ARGS is now correct in Makefile (uses
-            # $(TOOLCHAIN_DIR) with -nostdinc), no sed override needed.
-
-            if [ "$USE_PREBUILT" = "1" ] && [ -d "$PREBUILT_DIR" ] && [ "$(ls -A "$PREBUILT_DIR")" ]; then
-              echo "=== Using prebuilt binaries (skipping cargo build) ==="
-              # Replace Build/Compile with per-variant binary copy.
-              # $(or $(BUILD_VARIANT),full) handles the default variant.
-              sed -i '\|^Build/Compile=|c\Build/Compile=mkdir -p $(PKG_INSTALL_DIR)/bin \&\& cp '"$PREBUILT_DIR"'/$(or $(BUILD_VARIANT),full)/easytier-core $(PKG_INSTALL_DIR)/bin/' package/easytier/Makefile
-            else
-              echo "=== Will compile Rust from source ==="
-                # Makefile uses standard Build/Compile/Cargo (cargo install).
-              # Only mipsel needs -Z build-std (no prebuilt std for tier-3
-              # targets).  Makefile's ifdef detects CARGO_BUILD_STD_FLAGS
-              # in the environment and redefines Build/Compile/Cargo to
-              # inject the flag — no sed override needed.
-              if [ "${{ matrix.build_std }}" = "true" ]; then
-                export CARGO_BUILD_STD_FLAGS="-Z build-std"
-              fi
-            fi
+            cp "$WORKSPACE/Makefile.legacy" package/easytier/Makefile
+            cp -r "$WORKSPACE/files" package/easytier/
 
             # Select packages
             printf 'CONFIG_PACKAGE_easytier=y\nCONFIG_PACKAGE_easytier-lite=y\n' >> .config
             make defconfig
 
-            echo "=== Building packages ($PKG_FMT) ==="
-            # Cargo profile optimizations (LTO, codegen-units, panic, etc.)
-            # are defined in Makefile via export, no need to set them here.
-            # BuildPackage generates compile targets for ALL variants
-            # (full + lite), so a single make package/easytier/compile
-            # builds both.  Separate easytier-lite/compile is wrong:
-            # easytier-lite has VARIANT:=lite so its target is
-            # package/easytier/lite/compile (not package/easytier-lite/compile).
-            make package/easytier/compile V=s || make package/easytier/compile V=s
+            echo "=== Building packages ($PKG_FMT) — prebuilt only ==="
+            # PREBUILT_DIR is exported to make so Makefile.legacy can find
+            # the prebuilt binaries compiled in Step 1.
+            make package/easytier/compile V=s PREBUILT_DIR="$PREBUILT_DIR" || \
+              make package/easytier/compile V=s PREBUILT_DIR="$PREBUILT_DIR"
 
-            # Collect artifacts — only easytier packages.
-            # ONLY collect from bin/packages/ (standard ar-archived ipk / apk).
-            # Do NOT collect from bin/targets/ — those packages use a different
-            # format (gzip) and would overwrite the correct ones from bin/packages/.
+            # Collect artifacts
             mkdir -p "$WORKSPACE/output/$SDK_VER"
             find bin/packages -type f -name 'easytier*' -exec cp {} "$WORKSPACE/output/$SDK_VER/" \; 2>/dev/null || true
-
-            # Save prebuilt binaries for the next SDK build (if this was
-            # a from-source build).  Save per-variant since full and lite
-            # produce different binaries after the --no-default-features fix.
-            #
-            # IMPORTANT: We cannot look in build_dir/*/easytier-*/target-$variant/
-            # because OpenWrt's post-build autoremove wipes the build dir
-            # (including cargo target/) after each variant is packaged.
-            # Extract directly from bin/packages/ ipk/apk files instead of
-            # from output/ to avoid bin/targets/ format conflicts.
-            if [ "$USE_PREBUILT" != "1" ]; then
-              mkdir -p "$PREBUILT_DIR/full" "$PREBUILT_DIR/lite"
-              for variant in full lite; do
-                # Package names: "easytier" for full, "easytier-lite" for lite
-                pkg_name="easytier"
-                if [ "$variant" = "lite" ]; then pkg_name="easytier-lite"; fi
-                # Search in bin/packages/ only (ar archives, not gzip)
-                pkg=$(find bin/packages -type f -name '${pkg_name}_*.${PKG_FMT}' 2>/dev/null | head -1)
-                if [ -n "$pkg" ]; then
-                  # Extract easytier-core from the package.
-                  # ipk = ar archive containing data.tar.{gz,xz,zst}
-                  # apk = tar.gz (OpenWrt apk mkpkg format)
-                  tmp=$(mktemp -d)
-                  if [ "$PKG_FMT" = "ipk" ]; then
-                    (cd "$tmp" && ar x "$pkg") || { echo "WARNING: ar x failed for $pkg"; file "$pkg"; rm -rf "$tmp"; continue; }
-                    tar xf "$tmp"/data.tar.* -C "$tmp" 2>/dev/null || true
-                  else
-                    tar xzf "$pkg" -C "$tmp" 2>/dev/null || true
-                  fi
-                  bin=$(find "$tmp" -name "easytier-core" -type f 2>/dev/null | head -1)
-                  if [ -n "$bin" ]; then
-                    cp "$bin" "$PREBUILT_DIR/$variant/"
-                    echo "Saved prebuilt $variant binary: $(ls -lh "$PREBUILT_DIR/$variant/easytier-core" | awk '{print $5}')"
-                  else
-                    echo "WARNING: easytier-core not found in $pkg"
-                  fi
-                  rm -rf "$tmp"
-                else
-                  echo "WARNING: package for variant '$variant' not found in bin/packages/"
-                fi
-              done
-            fi
 
             cd ..
             rm -rf "$DIR"
             echo "=== $SDK_VER ($PKG_FMT) done ==="
-          }
-
-          # First SDK: compile Rust from source
-          build_sdk "23.05.6" "ipk" "xz" ""
-          # Second SDK: reuse prebuilt binaries, skip cargo build
-          build_sdk "25.12.4" "apk" "zst" "1"
+          fi
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

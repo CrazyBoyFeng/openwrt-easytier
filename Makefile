@@ -13,8 +13,10 @@ PKG_SOURCE_URL:=https://codeload.github.com/EasyTier/EasyTier/tar.gz/v$(PKG_VERS
 PKG_HASH:=352c0866da709415a837405a6ce4f51b8dfae27e5d5c1da1fb4d8f7338e46795
 
 # codeload tarball top-level dir is EasyTier-x.y.z (uppercase)
-# NOTE: PKG_SOURCE_SUBDIR is not honored by SDK 23.05 build variants,
-# so Build/Prepare is overridden to use --strip-components=1.
+# SDK 25.12.4 honors PKG_SOURCE_SUBDIR natively.
+# NOTE (legacy, for 23.05.6): PKG_SOURCE_SUBDIR is not honored by SDK
+# 23.05 build variants, so Build/Prepare had to use --strip-components=1.
+# Retained for reference; can be removed once 23.05.6 support is dropped.
 PKG_SOURCE_SUBDIR:=EasyTier-$(PKG_VERSION)
 
 PKG_MAINTAINER:=CrazyBoyFeng
@@ -42,10 +44,10 @@ include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk
 # Fix: filter out the conflicting profile keys, then append our preferred
 # values so that CARGO_PKG_VARS and our exports are consistent.
 CARGO_PKG_VARS := $(filter-out \
-	CARGO_PROFILE_RELEASE_LTO=% \
-	CARGO_PROFILE_RELEASE_OPT_LEVEL=% \
-	CARGO_PROFILE_RELEASE_PANIC=%, \
-	$(CARGO_PKG_VARS))
+        CARGO_PROFILE_RELEASE_LTO=% \
+        CARGO_PROFILE_RELEASE_OPT_LEVEL=% \
+        CARGO_PROFILE_RELEASE_PANIC=%, \
+        $(CARGO_PKG_VARS))
 
 CARGO_PKG_VARS += CARGO_PROFILE_RELEASE_LTO=fat
 CARGO_PKG_VARS += CARGO_PROFILE_RELEASE_OPT_LEVEL=3
@@ -61,21 +63,24 @@ CARGO_PKG_VARS += PROTOC=$(STAGING_DIR_HOSTPKG)/bin/protoc
 CARGO_PKG_VARS += BINDGEN_EXTRA_CLANG_ARGS="-nostdinc -I$(TOOLCHAIN_DIR)/include -I$(TOOLCHAIN_DIR)/usr/include"
 
 # ============ Tier-3 target support (-Z build-std) ============
-# When CARGO_BUILD_STD_FLAGS is set in the environment (e.g. by CI
-# for mipsel), redefine Build/Compile/Cargo to inject the flag between
-# "cargo" and "install".  This avoids sed-overriding the build command.
-ifdef CARGO_BUILD_STD_FLAGS
-define Build/Compile/Cargo
-	+$(CARGO_PKG_VARS) \
-	cargo $(CARGO_BUILD_STD_FLAGS) install -v \
-		--profile $(CARGO_PKG_PROFILE) \
-		$(if $(strip $(RUST_PKG_FEATURES)),--features "$(strip $(RUST_PKG_FEATURES))") \
-		--root $(PKG_INSTALL_DIR) \
-		--path "$(PKG_BUILD_DIR)/$(if $(strip $(1)),$(strip $(1)))" \
-		$(if $(filter --jobserver%,$(PKG_JOBS)),,-j1) \
-		$(2)
-endef
-endif
+# NOTE (legacy, for 23.05.6 SDK standalone build): When CARGO_BUILD_STD_FLAGS
+# is set in the environment (e.g. by CI for mipsel), redefine Build/Compile/Cargo
+# to inject the flag between "cargo" and "install".  In the current CI, 25.12.4
+# always compiles first and mipsel uses build-std; this ifdef is handled via
+# CI sed override in build.yml.  Retained for reference; can be removed once
+# 23.05.6 support is dropped.
+# ifdef CARGO_BUILD_STD_FLAGS
+# define Build/Compile/Cargo
+#       +$(CARGO_PKG_VARS) \
+#       cargo $(CARGO_BUILD_STD_FLAGS) install -v \
+#               --profile $(CARGO_PKG_PROFILE) \
+#               $(if $(strip $(RUST_PKG_FEATURES)),--features "$(strip $(RUST_PKG_FEATURES))") \
+#               --root $(PKG_INSTALL_DIR) \
+#               --path "$(PKG_BUILD_DIR)/$(if $(strip $(1)),$(strip $(1)))" \
+#               $(if $(filter --jobserver%,$(PKG_JOBS)),,-j1) \
+#               $(2)
+# endef
+# endif
 
 # ============ common ============
 define Package/easytier/Default
@@ -146,29 +151,29 @@ else
 Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core) && (command -v upx >/dev/null 2>&1 && upx --lzma --best $(PKG_INSTALL_DIR)/bin/easytier-core || true)
 endif
 
-# Override prepare to handle case-sensitive directory name mismatch.
-# The codeload tarball top-level directory is EasyTier-x.y.z (uppercase E)
-# but PKG_BUILD_DIR uses lowercase easytier-x.y.z (based on PKG_NAME).
-# SDK 24.10+ honors PKG_SOURCE_SUBDIR, but SDK 23.05 build variants don't.
-# Use --strip-components=1 to strip the uppercase prefix and extract
-# directly into PKG_BUILD_DIR, so patches can find files.
-define Build/Prepare
-	rm -rf $(PKG_BUILD_DIR)
-	mkdir -p $(PKG_BUILD_DIR)
-	gzip -dc $(DL_DIR)/$(PKG_SOURCE) | tar -C $(PKG_BUILD_DIR) --strip-components=1 -xf -
-	$(Build/Patch/Default)
-endef
+# NOTE (legacy, for 23.05.6): Override prepare to handle case-sensitive
+# directory name mismatch.  The codeload tarball top-level directory is
+# EasyTier-x.y.z (uppercase E) but PKG_BUILD_DIR uses lowercase
+# easytier-x.y.z (based on PKG_NAME).  SDK 25.12.4 honors PKG_SOURCE_SUBDIR
+# so this workaround is unnecessary.  Retained for reference; can be
+# removed once 23.05.6 support is dropped.
+# define Build/Prepare
+#       rm -rf $(PKG_BUILD_DIR)
+#       mkdir -p $(PKG_BUILD_DIR)
+#       gzip -dc $(DL_DIR)/$(PKG_SOURCE) | tar -C $(PKG_BUILD_DIR) --strip-components=1 -xf -
+#       $(Build/Patch/Default)
+# endef
 
 # Define install for easytier (full).  easytier-lite shares the same
 # install via a variable alias (jq-style).  RustBinPackage uses ifndef, so
 # defining install here prevents it from generating a duplicate default rule.
 define Package/easytier/install
-	$(INSTALL_DIR) $(1)/usr/bin
-	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/bin/easytier-core $(1)/usr/bin/
-	$(INSTALL_DIR) $(1)/etc/config
-	$(INSTALL_CONF) ./files/etc/config/easytier $(1)/etc/config/easytier
-	$(INSTALL_DIR) $(1)/etc/init.d
-	$(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
+        $(INSTALL_DIR) $(1)/usr/bin
+        $(INSTALL_BIN) $(PKG_INSTALL_DIR)/bin/easytier-core $(1)/usr/bin/
+        $(INSTALL_DIR) $(1)/etc/config
+        $(INSTALL_CONF) ./files/etc/config/easytier $(1)/etc/config/easytier
+        $(INSTALL_DIR) $(1)/etc/init.d
+        $(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
 endef
 
 Package/easytier-lite/install = $(Package/easytier/install)
