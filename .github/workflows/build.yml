@@ -155,7 +155,7 @@ jobs:
             # Match by package NAME, not extension — SDKs may produce
             # .ipk or .apk depending on version.
             mkdir -p "$WORKSPACE/output/$SDK_VER"
-            find bin/packages bin/targets -name 'easytier*' -exec cp {} "$WORKSPACE/output/$SDK_VER/" \; 2>/dev/null || true
+            find bin/packages bin/targets -type f -name 'easytier*' -exec cp {} "$WORKSPACE/output/$SDK_VER/" \; 2>/dev/null || true
 
             # Save prebuilt binaries for the next SDK build (if this was
             # a from-source build).  Save per-variant since full and lite
@@ -179,7 +179,7 @@ jobs:
                   # apk = tar.gz (OpenWrt apk mkpkg format)
                   tmp=$(mktemp -d)
                   if [ "$PKG_FMT" = "ipk" ]; then
-                    (cd "$tmp" && ar x "$pkg")
+                    (cd "$tmp" && ar x "$pkg") || { echo "WARNING: ar x failed for $pkg"; file "$pkg"; rm -rf "$tmp"; continue; }
                     tar xf "$tmp"/data.tar.* -C "$tmp" 2>/dev/null || true
                   else
                     tar xzf "$pkg" -C "$tmp" 2>/dev/null || true
