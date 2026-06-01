@@ -1,0 +1,140 @@
+diff -ru orig/EasyTier-2.6.4/easytier/Cargo.toml mod/EasyTier-2.6.4/easytier/Cargo.toml
+--- a/easytier/Cargo.toml	2026-05-12 12:26:16.000000000 +0000
++++ b/easytier/Cargo.toml	2026-06-01 08:33:06.883275616 +0000
+@@ -268,7 +268,6 @@
+ netlink-packet-utils = "0.5.2"
+ # for magic dns
+ resolv-conf = "0.7.3"
+-dbus = { version = "0.9.7", features = ["vendored"] }
+ which = "7.0.3"
+ 
+ [target.'cfg(all(windows, any(target_arch = "x86_64", target_arch = "x86")))'.dependencies]
+diff -ru orig/EasyTier-2.6.4/easytier/src/instance/dns_server/system_config/linux.rs mod/EasyTier-2.6.4/easytier/src/instance/dns_server/system_config/linux.rs
+--- a/easytier/src/instance/dns_server/system_config/linux.rs	2026-05-12 12:26:16.000000000 +0000
++++ b/easytier/src/instance/dns_server/system_config/linux.rs	2026-06-01 08:33:06.918275800 +0000
+@@ -1,7 +1,6 @@
+ // translated from tailscale #32ce1bdb48078ec4cedaeeb5b1b2ff9c0ef61a49
+ 
+ use anyhow::{Context, Result};
+-use dbus::blocking::stdintf::org_freedesktop_dbus::Properties as _;
+ use std::fs;
+ use std::net::Ipv4Addr;
+ use std::path::Path;
+@@ -10,7 +9,6 @@
+ use version_compare::Cmp;
+ 
+ // 声明依赖项（需要添加到Cargo.toml）
+-// use dbus::blocking::Connection;
+ // use nix::unistd::AccessFlags;
+ // use resolv_conf::Resolver;
+ 
+@@ -25,8 +23,6 @@
+     source: Option<anyhow::Error>,
+ }
+ 
+-type DbusPingFn = dyn Fn(&str, &str) -> Result<()>;
+-type DbusReadStringFn = dyn Fn(&str, &str, &str, &str) -> Result<String>;
+ type NmIsUsingResolvedFn = dyn Fn() -> Result<()>;
+ type NmVersionBetweenFn = dyn Fn(&str, &str) -> Result<bool>;
+ type ResolvconfStyleFn = dyn Fn() -> String;
+@@ -34,8 +30,6 @@
+ // 配置环境结构体
+ struct OSConfigEnv {
+     fs: Box<dyn FileSystem>,
+-    dbus_ping: Box<DbusPingFn>,
+-    dbus_read_string: Box<DbusReadStringFn>,
+     nm_is_using_resolved: Box<NmIsUsingResolvedFn>,
+     nm_version_between: Box<NmVersionBetweenFn>,
+     resolvconf_style: Box<dyn Fn() -> String>,
+@@ -67,34 +61,7 @@
+ 
+ /// 检查 NetworkManager 是否使用 systemd-resolved 作为 DNS 管理器
+ pub fn nm_is_using_resolved() -> Result<()> {
+-    // 连接系统 D-Bus
+-    let conn = dbus::blocking::Connection::new_system().context("Failed to connect to D-Bus")?;
+-
+-    // 创建 NetworkManager DnsManager 对象代理
+-    let proxy = conn.with_proxy(
+-        "org.freedesktop.NetworkManager",
+-        "/org/freedesktop/NetworkManager/DnsManager",
+-        std::time::Duration::from_secs(1),
+-    );
+-
+-    // 获取 Mode 属性
+-    let (value,): (dbus::arg::Variant<Box<dyn dbus::arg::RefArg + 'static>>,) = proxy
+-        .method_call(
+-            "org.freedesktop.DBus.Properties",
+-            "Get",
+-            ("org.freedesktop.NetworkManager.DnsManager", "Mode"),
+-        )
+-        .context("Failed to get NM mode property")?;
+-
+-    // 检查 Mode 是否为 "systemd-resolved"
+-    if value.0.as_str() != Some("systemd-resolved") {
+-        return Err(anyhow::anyhow!(
+-            "NetworkManager is not using systemd-resolved, found: {:?}",
+-            value
+-        ));
+-    }
+-
+-    Ok(())
++    Err(anyhow::anyhow!("NetworkManager not available on OpenWrt"))
+ }
+ 
+ /// 返回系统中使用的 resolvconf 实现类型（"debian" 或 "openresolv"）
+@@ -132,8 +99,6 @@
+ fn new_os_config_env() -> OSConfigEnv {
+     OSConfigEnv {
+         fs: Box::new(DirectFS),
+-        dbus_ping: Box::new(dbus_ping),
+-        dbus_read_string: Box::new(dbus_read_string),
+         nm_is_using_resolved: Box::new(nm_is_using_resolved),
+         nm_version_between: Box::new(nm_version_between),
+         resolvconf_style: Box::new(resolvconf_style),
+@@ -223,7 +188,7 @@
+ 
+     // 检查systemd-resolved状态
+     let resolved_up =
+-        (env.dbus_ping)("org.freedesktop.resolve1", "/org/freedesktop/resolve1").is_ok();
++        dbus_ping("org.freedesktop.resolve1", "/org/freedesktop/resolve1").is_ok();
+     if resolved_up {
+         dbg("resolved-ping", "yes");
+     }
+@@ -267,34 +232,17 @@
+ 
+ // D-Bus ping实现
+ fn dbus_ping(name: &str, object_path: &str) -> Result<()> {
+-    let conn = dbus::blocking::Connection::new_system()?;
+-    let proxy = conn.with_proxy(name, object_path, PING_TIMEOUT);
+-    let _: () = proxy.method_call("org.freedesktop.DBus.Peer", "Ping", ())?;
+-    Ok(())
++    Err(anyhow::anyhow!("D-Bus not available on OpenWrt"))
+ }
+ 
+ // D-Bus读取字符串实现
+ fn dbus_read_string(name: &str, object_path: &str, iface: &str, member: &str) -> Result<String> {
+-    let conn = dbus::blocking::Connection::new_system()?;
+-    let proxy = conn.with_proxy(name, object_path, PING_TIMEOUT);
+-    let (value,): (String,) =
+-        proxy.method_call("org.freedesktop.DBus.Properties", "Get", (iface, member))?;
+-    Ok(value)
++    Err(anyhow::anyhow!("D-Bus not available on OpenWrt"))
+ }
+ 
+ // NetworkManager版本检查
+ fn nm_version_between(first: &str, last: &str) -> Result<bool> {
+-    let conn = dbus::blocking::Connection::new_system()?;
+-    let proxy = conn.with_proxy(
+-        "org.freedesktop.NetworkManager",
+-        "/org/freedesktop/NetworkManager",
+-        PING_TIMEOUT,
+-    );
+-
+-    let version: String = proxy.get("org.freedesktop.NetworkManager", "Version")?;
+-    let cmp_first = version_compare::compare(&version, first).unwrap_or(Cmp::Lt);
+-    let cmp_last = version_compare::compare(&version, last).unwrap_or(Cmp::Gt);
+-    Ok(cmp_first == Cmp::Ge && cmp_last == Cmp::Le)
++    Err(anyhow::anyhow!("NetworkManager not available on OpenWrt"))
+ }
+ 
+ // 检查是否实际使用systemd-resolved
