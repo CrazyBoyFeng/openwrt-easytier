@@ -153,10 +153,10 @@ jobs:
               # are defined in Makefile; here we only override the build command.
               if [ "${{ matrix.build_std }}" = "true" ]; then
                 # mipsel: build std from source via -Zbuild-std
-                sed -i '\|^Build/Compile=|c\Build/Compile=$(CARGO_PKG_VARS) cargo -Z build-std build -v --manifest-path $(PKG_BUILD_DIR)/easytier/Cargo.toml -p easytier --bin easytier-core --profile $(CARGO_PKG_PROFILE) $(if $(strip $(RUST_PKG_FEATURES)),--no-default-features --features "$(strip $(RUST_PKG_FEATURES))") \&\& upx --lzma --best $(PKG_BUILD_DIR)/target/$(RUSTC_TARGET_ARCH)/$(CARGO_PKG_PROFILE)/easytier-core \&\& mkdir -p $(PKG_INSTALL_DIR)/bin \&\& cp $(PKG_BUILD_DIR)/target/$(RUSTC_TARGET_ARCH)/$(CARGO_PKG_PROFILE)/easytier-core $(PKG_INSTALL_DIR)/bin/' package/easytier/Makefile
+                sed -i '\|^Build/Compile=|c\Build/Compile=$(CARGO_PKG_VARS) cargo -Z build-std build -v --manifest-path $(PKG_BUILD_DIR)/easytier/Cargo.toml -p easytier --bin easytier-core --profile $(CARGO_PKG_PROFILE) --target-dir $(PKG_BUILD_DIR)/target-$(or $(BUILD_VARIANT),full) $(if $(strip $(RUST_PKG_FEATURES)),--no-default-features --features "$(strip $(RUST_PKG_FEATURES))") \&\& upx --lzma --best $(PKG_BUILD_DIR)/target-$(or $(BUILD_VARIANT),full)/$(RUSTC_TARGET_ARCH)/$(CARGO_PKG_PROFILE)/easytier-core \&\& mkdir -p $(PKG_INSTALL_DIR)/bin \&\& cp $(PKG_BUILD_DIR)/target-$(or $(BUILD_VARIANT),full)/$(RUSTC_TARGET_ARCH)/$(CARGO_PKG_PROFILE)/easytier-core $(PKG_INSTALL_DIR)/bin/' package/easytier/Makefile
               else
                 # targets with prebuilt std: use regular cargo build
-                sed -i '\|^Build/Compile=|c\Build/Compile=$(CARGO_PKG_VARS) cargo build -v --manifest-path $(PKG_BUILD_DIR)/easytier/Cargo.toml -p easytier --bin easytier-core --profile $(CARGO_PKG_PROFILE) $(if $(strip $(RUST_PKG_FEATURES)),--no-default-features --features "$(strip $(RUST_PKG_FEATURES))") \&\& upx --lzma --best $(PKG_BUILD_DIR)/target/$(RUSTC_TARGET_ARCH)/$(CARGO_PKG_PROFILE)/easytier-core \&\& mkdir -p $(PKG_INSTALL_DIR)/bin \&\& cp $(PKG_BUILD_DIR)/target/$(RUSTC_TARGET_ARCH)/$(CARGO_PKG_PROFILE)/easytier-core $(PKG_INSTALL_DIR)/bin/' package/easytier/Makefile
+                sed -i '\|^Build/Compile=|c\Build/Compile=$(CARGO_PKG_VARS) cargo build -v --manifest-path $(PKG_BUILD_DIR)/easytier/Cargo.toml -p easytier --bin easytier-core --profile $(CARGO_PKG_PROFILE) --target-dir $(PKG_BUILD_DIR)/target-$(or $(BUILD_VARIANT),full) $(if $(strip $(RUST_PKG_FEATURES)),--no-default-features --features "$(strip $(RUST_PKG_FEATURES))") \&\& upx --lzma --best $(PKG_BUILD_DIR)/target-$(or $(BUILD_VARIANT),full)/$(RUSTC_TARGET_ARCH)/$(CARGO_PKG_PROFILE)/easytier-core \&\& mkdir -p $(PKG_INSTALL_DIR)/bin \&\& cp $(PKG_BUILD_DIR)/target-$(or $(BUILD_VARIANT),full)/$(RUSTC_TARGET_ARCH)/$(CARGO_PKG_PROFILE)/easytier-core $(PKG_INSTALL_DIR)/bin/' package/easytier/Makefile
               fi
             fi
 
@@ -187,16 +187,14 @@ jobs:
             # and also in cargo target/ output (used by CI's sed-replaced cargo build).
             if [ "$USE_PREBUILT" != "1" ]; then
               mkdir -p "$PREBUILT_DIR/full" "$PREBUILT_DIR/lite"
-              for d in $(find build_dir/target-* -maxdepth 1 -type d -name 'easytier*' 2>/dev/null); do
-                bin=$(find "$d" -name "easytier-core" -type f 2>/dev/null | head -1)
-                if [ -n "$bin" ]; then
-                  case "$(basename "$d")" in
-                    *lite*) variant="lite" ;;
-                    *) variant="full" ;;
-                  esac
-                  cp "$bin" "$PREBUILT_DIR/$variant/"
-                  echo "Saved prebuilt $variant binary: $(ls -lh "$PREBUILT_DIR/$variant/easytier-core" | awk '{print $5}')"
-                fi
+              for variant in full lite; do
+                for d in $(find build_dir/target-* -maxdepth 1 -type d -name 'easytier*' 2>/dev/null); do
+                  bin=$(find "$d/target-$variant" -name "easytier-core" -type f 2>/dev/null | head -1)
+                  if [ -n "$bin" ]; then
+                    cp "$bin" "$PREBUILT_DIR/$variant/"
+                    echo "Saved prebuilt $variant binary: $(ls -lh "$PREBUILT_DIR/$variant/easytier-core" | awk '{print $5}')"
+                  fi
+                done
               done
             fi
 
