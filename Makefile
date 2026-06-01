@@ -95,15 +95,15 @@ endif
 export CARGO_PROFILE_RELEASE_LTO=fat
 export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
 export CARGO_PROFILE_RELEASE_PANIC=abort
-export CARGO_PROFILE_RELEASE_OPT_LEVEL=z
+export CARGO_PROFILE_RELEASE_OPT_LEVEL=3
 export CARGO_PROFILE_RELEASE_STRIP=true
 
 # easytier is a workspace member, pass subdirectory path to cargo.
 # Only build easytier-core (skip easytier-cli which is not packaged).
 ifeq ($(BUILD_VARIANT),lite)
-Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core --no-default-features) && command -v upx >/dev/null 2>&1 && upx --best $(PKG_INSTALL_DIR)/bin/easytier-core || true
+Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core --no-default-features) && command -v upx >/dev/null 2>&1 && upx --lzma --best $(PKG_INSTALL_DIR)/bin/easytier-core || true
 else
-Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core) && command -v upx >/dev/null 2>&1 && upx --best $(PKG_INSTALL_DIR)/bin/easytier-core || true
+Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core) && command -v upx >/dev/null 2>&1 && upx --lzma --best $(PKG_INSTALL_DIR)/bin/easytier-core || true
 endif
 
 # Override prepare to handle case-sensitive directory name mismatch.
