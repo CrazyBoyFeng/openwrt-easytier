@@ -1,6 +1,5 @@
-diff -ru easytier-after001/easytier/Cargo.toml easytier-clean/easytier/Cargo.toml
---- easytier-after001/easytier/Cargo.toml	2026-05-31 13:46:30.541755343 +0000
-+++ easytier-clean/easytier/Cargo.toml	2026-05-31 13:46:37.651784177 +0000
+--- a/easytier/Cargo.toml
++++ b/easytier/Cargo.toml
 @@ -219,8 +219,6 @@
  ringbuf = "0.4.5"
  async-ringbuf = "0.3.1"
@@ -10,72 +9,13 @@ diff -ru easytier-after001/easytier/Cargo.toml easytier-clean/easytier/Cargo.tom
  zstd = { version = "0.13", optional = true }
  
  kcp-sys = { git = "https://github.com/EasyTier/kcp-sys", rev = "94964794caaed5d388463137da59b97499619e5f", optional = true }
-diff -ru easytier-after001/easytier/src/easytier-cli.rs easytier-clean/easytier/src/easytier-cli.rs
---- easytier-after001/easytier/src/easytier-cli.rs	2026-05-31 13:46:30.554755395 +0000
-+++ easytier-clean/easytier/src/easytier-cli.rs	2026-05-31 13:46:30.625755682 +0000
-@@ -20,11 +20,13 @@
- use easytier::ShellType;
- use humansize::format_size;
- use rust_i18n::t;
-+#[cfg(feature = "service-manager")]
- use service_manager::*;
- use tabled::settings::{Disable, Modify, Style, Width, location::ByColumnName, object::Columns};
- use terminal_size::{Width as TerminalWidth, terminal_size};
- use unicode_width::UnicodeWidthStr;
- 
-+#[cfg(feature = "service-manager")]
- use easytier::service_manager::{Service, ServiceInstallOptions};
- use tokio::time::timeout;
- 
-@@ -137,6 +139,7 @@
-     VpnPortal,
-     #[command(about = "inspect self easytier-core status")]
-     Node(NodeArgs),
-+    #[cfg(feature = "service-manager")]
-     #[command(about = "manage easytier-core as a system service")]
-     Service(ServiceArgs),
-     #[command(about = "show tcp/kcp proxy status")]
-@@ -430,6 +433,7 @@
-     List,
- }
- 
-+#[cfg(feature = "service-manager")]
- #[derive(Args, Debug)]
- struct ServiceArgs {
-     #[arg(short, long, default_value = env!("CARGO_PKG_NAME"), help = "service name")]
-@@ -439,6 +443,7 @@
-     sub_command: ServiceSubCommand,
- }
- 
-+#[cfg(feature = "service-manager")]
- #[derive(Subcommand, Debug)]
- enum ServiceSubCommand {
-     #[command(about = "register easytier-core as a system service")]
-@@ -453,6 +458,7 @@
-     Stop,
- }
- 
-+#[cfg(feature = "service-manager")]
- #[derive(Args, Debug)]
- struct InstallArgs {
-     #[arg(long, default_value = env!("CARGO_PKG_DESCRIPTION"), help = "service description")]
-@@ -2972,6 +2978,7 @@
-         SubCommand::Node(sub_cmd) => {
-             handler.handle_node(sub_cmd.sub_command.as_ref()).await?;
-         }
-+        #[cfg(feature = "service-manager")]
-         SubCommand::Service(service_args) => {
-             let service = Service::new(service_args.name)?;
-             match service_args.sub_command {
-diff -ru easytier-after001/easytier/src/lib.rs easytier-clean/easytier/src/lib.rs
---- easytier-after001/easytier/src/lib.rs	2026-05-31 13:46:30.551755383 +0000
-+++ easytier-clean/easytier/src/lib.rs	2026-05-31 13:46:30.598755573 +0000
-@@ -19,7 +19,7 @@
+--- a/easytier/src/lib.rs
++++ b/easytier/src/lib.rs
+@@ -19,7 +19,6 @@
  pub mod peers;
  pub mod proto;
  pub mod rpc_service;
 -pub mod service_manager;
-+#[cfg(feature = "service-manager")] pub mod service_manager;
  pub mod tunnel;
  pub mod utils;
  pub mod web_client;
