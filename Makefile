@@ -32,36 +32,50 @@ RUST_PKG_LOCKED:=0
 
 include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk
 
-# ============ Build environment for cargo ============
-# Cross-compilation environment variables for cargo build.
-# Derived from rust-values.mk (included via rust-package.mk) which
-# provides: RUSTC_TARGET_ARCH, CARGO_HOME, CARGO_RUSTFLAGS,
-# RUSTC_LDFLAGS, TARGET_CC_NOCACHE, HOSTCC_NOCACHE, PKG_JOBS.
+# ============ Override CARGO_PKG_VARS ============
+# CARGO_PKG_VARS (from rust-package.mk) includes CARGO_PKG_CONFIG_VARS
+# (from rust-values.mk) which sets cargo profile variables as command-prefix
+# variables: LTO=true, OPT_LEVEL=z, PANIC=unwind.  Command-prefix variables
+# override exported environment variables with the same name, so those
+# values silently override our profile exports below.
 #
-# Intentionally NOT using $(CARGO_PKG_VARS) as command prefix.
-# CARGO_PKG_VARS includes CARGO_PKG_CONFIG_VARS from rust-values.mk
-# which sets cargo profile variables (LTO=true, OPT_LEVEL=z,
-# PANIC=unwind).  Command-prefix variables override exported
-# environment variables, so those values would silently override our
-# profile exports below.  By building our own var list we keep only
-# the cross-compilation settings and let our profile exports take effect.
-CARGO_BUILD_ENV := \
-	CARGO_BUILD_TARGET=$(RUSTC_TARGET_ARCH) \
-	CARGO_TARGET_$(subst -,_,$(call toupper,$(RUSTC_TARGET_ARCH)))_LINKER=$(TARGET_CC_NOCACHE) \
-	CARGO_HOME=$(CARGO_HOME) \
-	RUSTFLAGS="-Ctarget-feature=-crt-static $(RUSTC_LDFLAGS)" \
-	TARGET_CC=$(TARGET_CC_NOCACHE) \
-	TARGET_CFLAGS="$(TARGET_CFLAGS)" \
-	CC=$(HOSTCC_NOCACHE) \
-	MAKEFLAGS="$(PKG_JOBS)"
+# Fix: filter out the conflicting profile keys, then append our preferred
+# values so that CARGO_PKG_VARS and our exports are consistent.
+CARGO_PKG_VARS := $(filter-out \
+	CARGO_PROFILE_RELEASE_LTO=% \
+	CARGO_PROFILE_RELEASE_OPT_LEVEL=% \
+	CARGO_PROFILE_RELEASE_PANIC=%, \
+	$(CARGO_PKG_VARS))
+
+CARGO_PKG_VARS += CARGO_PROFILE_RELEASE_LTO=fat
+CARGO_PKG_VARS += CARGO_PROFILE_RELEASE_OPT_LEVEL=3
+CARGO_PKG_VARS += CARGO_PROFILE_RELEASE_PANIC=abort
+CARGO_PKG_VARS += CARGO_PROFILE_RELEASE_STRIP=true
 
 # prost-build needs protoc on the host
-CARGO_BUILD_ENV += PROTOC=$(STAGING_DIR_HOSTPKG)/bin/protoc
+CARGO_PKG_VARS += PROTOC=$(STAGING_DIR_HOSTPKG)/bin/protoc
 # bindgen (used by kcp-sys) needs cross-compilation toolchain headers.
 # -nostdinc prevents clang from searching host /usr/include (glibc
 # conflicts with musl cross target).  $(TOOLCHAIN_DIR) is defined in
 # rules.mk: staging_dir/toolchain-<arch>_gcc-<ver>_musl.
-CARGO_BUILD_ENV += BINDGEN_EXTRA_CLANG_ARGS="-nostdinc -I$(TOOLCHAIN_DIR)/include -I$(TOOLCHAIN_DIR)/usr/include"
+CARGO_PKG_VARS += BINDGEN_EXTRA_CLANG_ARGS="-nostdinc -I$(TOOLCHAIN_DIR)/include -I$(TOOLCHAIN_DIR)/usr/include"
+
+# ============ Tier-3 target support (-Z build-std) ============
+# When CARGO_BUILD_STD_FLAGS is set in the environment (e.g. by CI
+# for mipsel), redefine Build/Compile/Cargo to inject the flag between
+# "cargo" and "install".  This avoids sed-overriding the build command.
+ifdef CARGO_BUILD_STD_FLAGS
+define Build/Compile/Cargo
+	+$(CARGO_PKG_VARS) \
+	cargo $(CARGO_BUILD_STD_FLAGS) install -v \
+		--profile $(CARGO_PKG_PROFILE) \
+		$(if $(strip $(RUST_PKG_FEATURES)),--features "$(strip $(RUST_PKG_FEATURES))") \
+		--root $(PKG_INSTALL_DIR) \
+		--path "$(PKG_BUILD_DIR)/$(if $(strip $(1)),$(strip $(1)))" \
+		$(if $(filter --jobserver%,$(PKG_JOBS)),,-j1) \
+		$(2)
+endef
+endif
 
 # ============ common ============
 define Package/easytier/Default
@@ -116,34 +130,20 @@ endif
 
 # Cargo profile optimizations for release builds.
 # These are exported as environment variables read directly by cargo.
-# Since Build/Compile uses CARGO_BUILD_ENV (not CARGO_PKG_VARS) as
-# command prefix, these exports are NOT overridden by conflicting
-# profile settings from rust-values.mk's CARGO_PKG_CONFIG_VARS.
+# Since CARGO_PKG_VARS above now contains matching values, command-prefix
+# and exports are consistent — no silent override occurs.
 export CARGO_PROFILE_RELEASE_LTO=fat
 export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
 export CARGO_PROFILE_RELEASE_PANIC=abort
 export CARGO_PROFILE_RELEASE_OPT_LEVEL=3
 export CARGO_PROFILE_RELEASE_STRIP=true
 
-# CARGO_BUILD_STD_FLAGS: override from environment (e.g. CI sets
-# "-Z build-std" for tier-3 targets like mipsel where no prebuilt
-# std exists).  Empty by default for targets with prebuilt std.
-CARGO_BUILD_STD_FLAGS ?=
-
 # easytier is a workspace member, pass subdirectory path to cargo.
 # Only build easytier-core (skip easytier-cli which is not packaged).
-# Uses cargo build (not cargo install) to avoid requiring rust/host.
-# Build/Compile/Cargo from rust-package.mk uses cargo install which
-# needs rust/host (~14 GB, ~1 h); cargo build only needs cargo in PATH.
-#
-# --target-dir separates build artifacts per variant (target-full/ or
-# target-lite/) to avoid feature flag conflicts between variants.
-#
-# UPX compresses the binary (~60-70% size reduction).
 ifeq ($(BUILD_VARIANT),lite)
-Build/Compile=$(CARGO_BUILD_ENV) cargo $(CARGO_BUILD_STD_FLAGS) build -v --manifest-path $(PKG_BUILD_DIR)/easytier/Cargo.toml -p easytier --bin easytier-core --no-default-features --features "$(strip $(RUST_PKG_FEATURES))" --profile $(CARGO_PKG_PROFILE) --target-dir $(PKG_BUILD_DIR)/target-$(or $(BUILD_VARIANT),full) && (command -v upx >/dev/null 2>&1 && upx --lzma --best $(PKG_BUILD_DIR)/target-$(or $(BUILD_VARIANT),full)/$(RUSTC_TARGET_ARCH)/$(CARGO_PKG_PROFILE)/easytier-core || true) && mkdir -p $(PKG_INSTALL_DIR)/bin && cp $(PKG_BUILD_DIR)/target-$(or $(BUILD_VARIANT),full)/$(RUSTC_TARGET_ARCH)/$(CARGO_PKG_PROFILE)/easytier-core $(PKG_INSTALL_DIR)/bin/
+Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core --no-default-features) && (command -v upx >/dev/null 2>&1 && upx --lzma --best $(PKG_INSTALL_DIR)/bin/easytier-core || true)
 else
-Build/Compile=$(CARGO_BUILD_ENV) cargo $(CARGO_BUILD_STD_FLAGS) build -v --manifest-path $(PKG_BUILD_DIR)/easytier/Cargo.toml -p easytier --bin easytier-core --profile $(CARGO_PKG_PROFILE) --target-dir $(PKG_BUILD_DIR)/target-$(or $(BUILD_VARIANT),full) && (command -v upx >/dev/null 2>&1 && upx --lzma --best $(PKG_BUILD_DIR)/target-$(or $(BUILD_VARIANT),full)/$(RUSTC_TARGET_ARCH)/$(CARGO_PKG_PROFILE)/easytier-core || true) && mkdir -p $(PKG_INSTALL_DIR)/bin && cp $(PKG_BUILD_DIR)/target-$(or $(BUILD_VARIANT),full)/$(RUSTC_TARGET_ARCH)/$(CARGO_PKG_PROFILE)/easytier-core $(PKG_INSTALL_DIR)/bin/
+Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core) && (command -v upx >/dev/null 2>&1 && upx --lzma --best $(PKG_INSTALL_DIR)/bin/easytier-core || true)
 endif
 
 # Override prepare to handle case-sensitive directory name mismatch.

@@ -127,10 +127,11 @@ jobs:
               sed -i '\|^Build/Compile=|c\Build/Compile=mkdir -p $(PKG_INSTALL_DIR)/bin \&\& cp '"$PREBUILT_DIR"'/$(or $(BUILD_VARIANT),full)/easytier-core $(PKG_INSTALL_DIR)/bin/' package/easytier/Makefile
             else
               echo "=== Will compile Rust from source ==="
-              # Makefile now uses cargo build (not cargo install) directly.
+                # Makefile uses standard Build/Compile/Cargo (cargo install).
               # Only mipsel needs -Z build-std (no prebuilt std for tier-3
-              # targets).  This is handled via CARGO_BUILD_STD_FLAGS which
-              # Makefile reads with ?= (environment override wins).
+              # targets).  Makefile's ifdef detects CARGO_BUILD_STD_FLAGS
+              # in the environment and redefines Build/Compile/Cargo to
+              # inject the flag — no sed override needed.
               if [ "${{ matrix.build_std }}" = "true" ]; then
                 export CARGO_BUILD_STD_FLAGS="-Z build-std"
               fi
