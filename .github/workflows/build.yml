@@ -188,7 +188,7 @@ jobs:
             if [ "$USE_PREBUILT" != "1" ]; then
               mkdir -p "$PREBUILT_DIR/full" "$PREBUILT_DIR/lite"
               for d in $(find build_dir/target-* -maxdepth 2 -type d -name 'easytier*' 2>/dev/null); do
-                bin=$(find "$d/ipkg-install/bin" "$d/target" -name "easytier-core" -type f 2>/dev/null | head -1)
+                bin=$(find "$d" -name "easytier-core" -type f 2>/dev/null | head -1)
                 if [ -n "$bin" ]; then
                   case "$(basename "$d")" in
                     *lite*) variant="lite" ;;
