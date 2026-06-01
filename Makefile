@@ -44,10 +44,10 @@ include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk
 # Fix: filter out the conflicting profile keys, then append our preferred
 # values so that CARGO_PKG_VARS and our exports are consistent.
 CARGO_PKG_VARS := $(filter-out \
-        CARGO_PROFILE_RELEASE_LTO=% \
-        CARGO_PROFILE_RELEASE_OPT_LEVEL=% \
-        CARGO_PROFILE_RELEASE_PANIC=%, \
-        $(CARGO_PKG_VARS))
+	CARGO_PROFILE_RELEASE_LTO=% \
+	CARGO_PROFILE_RELEASE_OPT_LEVEL=% \
+	CARGO_PROFILE_RELEASE_PANIC=%, \
+	$(CARGO_PKG_VARS))
 
 CARGO_PKG_VARS += CARGO_PROFILE_RELEASE_LTO=fat
 CARGO_PKG_VARS += CARGO_PROFILE_RELEASE_OPT_LEVEL=3
@@ -168,12 +168,12 @@ endif
 # install via a variable alias (jq-style).  RustBinPackage uses ifndef, so
 # defining install here prevents it from generating a duplicate default rule.
 define Package/easytier/install
-        $(INSTALL_DIR) $(1)/usr/bin
-        $(INSTALL_BIN) $(PKG_INSTALL_DIR)/bin/easytier-core $(1)/usr/bin/
-        $(INSTALL_DIR) $(1)/etc/config
-        $(INSTALL_CONF) ./files/etc/config/easytier $(1)/etc/config/easytier
-        $(INSTALL_DIR) $(1)/etc/init.d
-        $(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
+	$(INSTALL_DIR) $(1)/usr/bin
+	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/bin/easytier-core $(1)/usr/bin
+	$(INSTALL_DIR) $(1)/etc/config
+	$(INSTALL_CONF) ./files/etc/config/easytier $(1)/etc/config/easytier
+	$(INSTALL_DIR) $(1)/etc/init.d
+	$(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
 endef
 
 Package/easytier-lite/install = $(Package/easytier/install)

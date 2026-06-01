@@ -119,7 +119,7 @@ jobs:
           # only), so CI must handle build-std via sed override instead.
           if [ "${{ matrix.build_std }}" = "true" ]; then
             echo "=== mipsel: injecting -Z build-std via sed ==="
-            sed -i 's|^Build/Compile=\$(call Build/Compile/Cargo,easytier,--bin easytier-core --no-default-features)|Build/Compile=$(CARGO_PKG_VARS) cargo -Z build-std install -v --profile $(CARGO_PKG_PROFILE) --features "$(strip $(RUST_PKG_FEATURES))" --root $(PKG_INSTALL_DIR) --path "$(PKG_BUILD_DIR)/easytier" --bin easytier-core \&\& (command -v upx >/dev/null 2>\&1 \&\& upx --lzma --best $(PKG_INSTALL_DIR)/bin/easytier-core || true)|' package/easytier/Makefile
+            sed -i 's#^Build/Compile=\$(call Build/Compile/Cargo,easytier,--bin easytier-core --no-default-features)#Build/Compile=$(CARGO_PKG_VARS) cargo -Z build-std install -v --profile $(CARGO_PKG_PROFILE) --features "$(strip $(RUST_PKG_FEATURES))" --root $(PKG_INSTALL_DIR) --path "$(PKG_BUILD_DIR)/easytier" --bin easytier-core \&\& (command -v upx >/dev/null 2>\&1 \&\& upx --lzma --best $(PKG_INSTALL_DIR)/bin/easytier-core || true)#' package/easytier/Makefile
           fi
 
           # Select packages
