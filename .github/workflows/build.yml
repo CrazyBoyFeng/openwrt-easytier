@@ -117,46 +117,22 @@ jobs:
             sed -i 's|rust/host protobuf/host||' package/easytier/Makefile
             sed -i 's|PROTOC=\$(STAGING_DIR_HOSTPKG)/bin/protoc|PROTOC=/usr/bin/protoc|' package/easytier/Makefile
 
-            # SDK builds: BINDGEN needs cross-compilation target headers from the
-            # TOOLCHAIN staging dir.  -nostdinc prevents clang from searching
-            # the host /usr/include (glibc conflicts with musl cross target).
-            # We need two include dirs from the toolchain:
-            #   1. toolchain-*/include  — GCC wrapper layer (stddef.h, stdint.h, etc.)
-            #   2. toolchain-*/usr/include — musl libc headers
-            # IMPORTANT: Must use ABSOLUTE paths because cargo build scripts
-            # (e.g. kcp-sys) run in target/release/build/<crate-hash>/, NOT in
-            # the SDK root.  Relative paths would fail to resolve.
-            TOOLCHAIN_DIR=$(ls -d staging_dir/toolchain-* 2>/dev/null | head -1)
-            if [ -n "$TOOLCHAIN_DIR" ]; then
-              TOOLCHAIN_DIR="$(cd "$TOOLCHAIN_DIR" && pwd)"
-              echo "Overriding BINDGEN_EXTRA_CLANG_ARGS with toolchain includes: $TOOLCHAIN_DIR"
-              sed -i "s|BINDGEN_EXTRA_CLANG_ARGS=.*|BINDGEN_EXTRA_CLANG_ARGS=\"-nostdinc -I${TOOLCHAIN_DIR}/include -I${TOOLCHAIN_DIR}/usr/include\"|" package/easytier/Makefile
-            else
-              echo "WARNING: toolchain dir not found, bindgen may fail on cross-compile targets"
-            fi
+            # BINDGEN_EXTRA_CLANG_ARGS is now correct in Makefile (uses
+            # $(TOOLCHAIN_DIR) with -nostdinc), no sed override needed.
 
             if [ "$USE_PREBUILT" = "1" ] && [ -d "$PREBUILT_DIR" ] && [ "$(ls -A "$PREBUILT_DIR")" ]; then
               echo "=== Using prebuilt binaries (skipping cargo build) ==="
               # Replace Build/Compile with per-variant binary copy.
               # $(or $(BUILD_VARIANT),full) handles the default variant.
-              # sed c\ replaces the entire line; the original line may
-              # contain UPX (appended via &&), which is discarded here.
               sed -i '\|^Build/Compile=|c\Build/Compile=mkdir -p $(PKG_INSTALL_DIR)/bin \&\& cp '"$PREBUILT_DIR"'/$(or $(BUILD_VARIANT),full)/easytier-core $(PKG_INSTALL_DIR)/bin/' package/easytier/Makefile
             else
               echo "=== Will compile Rust from source ==="
-              # Replace cargo install (from Build/Compile/Cargo) with direct
-              # cargo build.  This avoids needing rust/host to be compiled from
-              # source (~14 GB, ~1 h).  rust-package.mk still provides the
-              # cross-compilation env vars (CARGO_PKG_VARS) and target/profile
-              # variables (RUSTC_TARGET_ARCH, CARGO_PKG_PROFILE).
-              # Cargo profile optimizations (LTO, codegen-units, etc.) and UPX
-              # are defined in Makefile; here we only override the build command.
+              # Makefile now uses cargo build (not cargo install) directly.
+              # Only mipsel needs -Z build-std (no prebuilt std for tier-3
+              # targets).  This is handled via CARGO_BUILD_STD_FLAGS which
+              # Makefile reads with ?= (environment override wins).
               if [ "${{ matrix.build_std }}" = "true" ]; then
-                # mipsel: build std from source via -Zbuild-std
-                sed -i '\|^Build/Compile=|c\Build/Compile=$(CARGO_PKG_VARS) cargo -Z build-std build -v --manifest-path $(PKG_BUILD_DIR)/easytier/Cargo.toml -p easytier --bin easytier-core --profile $(CARGO_PKG_PROFILE) --target-dir $(PKG_BUILD_DIR)/target-$(or $(BUILD_VARIANT),full) $(if $(strip $(RUST_PKG_FEATURES)),--no-default-features --features "$(strip $(RUST_PKG_FEATURES))") \&\& upx --lzma --best $(PKG_BUILD_DIR)/target-$(or $(BUILD_VARIANT),full)/$(RUSTC_TARGET_ARCH)/$(CARGO_PKG_PROFILE)/easytier-core \&\& mkdir -p $(PKG_INSTALL_DIR)/bin \&\& cp $(PKG_BUILD_DIR)/target-$(or $(BUILD_VARIANT),full)/$(RUSTC_TARGET_ARCH)/$(CARGO_PKG_PROFILE)/easytier-core $(PKG_INSTALL_DIR)/bin/' package/easytier/Makefile
-              else
-                # targets with prebuilt std: use regular cargo build
-                sed -i '\|^Build/Compile=|c\Build/Compile=$(CARGO_PKG_VARS) cargo build -v --manifest-path $(PKG_BUILD_DIR)/easytier/Cargo.toml -p easytier --bin easytier-core --profile $(CARGO_PKG_PROFILE) --target-dir $(PKG_BUILD_DIR)/target-$(or $(BUILD_VARIANT),full) $(if $(strip $(RUST_PKG_FEATURES)),--no-default-features --features "$(strip $(RUST_PKG_FEATURES))") \&\& upx --lzma --best $(PKG_BUILD_DIR)/target-$(or $(BUILD_VARIANT),full)/$(RUSTC_TARGET_ARCH)/$(CARGO_PKG_PROFILE)/easytier-core \&\& mkdir -p $(PKG_INSTALL_DIR)/bin \&\& cp $(PKG_BUILD_DIR)/target-$(or $(BUILD_VARIANT),full)/$(RUSTC_TARGET_ARCH)/$(CARGO_PKG_PROFILE)/easytier-core $(PKG_INSTALL_DIR)/bin/' package/easytier/Makefile
+                export CARGO_BUILD_STD_FLAGS="-Z build-std"
               fi
             fi
 
