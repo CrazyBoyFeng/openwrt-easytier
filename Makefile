@@ -130,13 +130,13 @@ export CARGO_PROFILE_RELEASE_STRIP=true
 # Each Build/Compile is a single line (no backslash continuation)
 # so that CI sed can target it via the EASYTIER_COMPILE_* markers.
 
-# EASYTIER_COMPILE_LITE
 ifeq ($(BUILD_VARIANT),lite)
+# EASYTIER_COMPILE_LITE
 Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core --no-default-features)
 endif
 
-# EASYTIER_COMPILE_FULL
 ifeq ($(BUILD_VARIANT),full)
+# EASYTIER_COMPILE_FULL
 Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core)
 endif
 
