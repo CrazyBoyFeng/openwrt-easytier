@@ -12,11 +12,11 @@ PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
 PKG_SOURCE_URL:=https://codeload.github.com/EasyTier/EasyTier/tar.gz/v$(PKG_VERSION)?
 PKG_HASH:=352c0866da709415a837405a6ce4f51b8dfae27e5d5c1da1fb4d8f7338e46795
 
-# codeload tarball top-level dir is EasyTier-x.y.z (uppercase)
-# SDK 25.12.4 honors PKG_SOURCE_SUBDIR natively.
-# NOTE (legacy, for 23.05.6): PKG_SOURCE_SUBDIR is not honored by SDK
-# 23.05 build variants, so Build/Prepare had to use --strip-components=1.
-# Retained for reference; can be removed once 23.05.6 support is dropped.
+# codeload tarball top-level dir is EasyTier-x.y.z (uppercase E)
+# but PKG_BUILD_DIR uses lowercase easytier-x.y.z (based on PKG_NAME).
+# PKG_SOURCE_SUBDIR only affects download cache naming, not the actual
+# extraction into PKG_BUILD_DIR, so Build/Prepare must use
+# --strip-components=1 to flatten the tarball into PKG_BUILD_DIR.
 PKG_SOURCE_SUBDIR:=EasyTier-$(PKG_VERSION)
 
 PKG_MAINTAINER:=CrazyBoyFeng
@@ -151,18 +151,17 @@ else
 Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core) && (command -v upx >/dev/null 2>&1 && upx --lzma --best $(PKG_INSTALL_DIR)/bin/easytier-core || true)
 endif
 
-# NOTE (legacy, for 23.05.6): Override prepare to handle case-sensitive
-# directory name mismatch.  The codeload tarball top-level directory is
-# EasyTier-x.y.z (uppercase E) but PKG_BUILD_DIR uses lowercase
-# easytier-x.y.z (based on PKG_NAME).  SDK 25.12.4 honors PKG_SOURCE_SUBDIR
-# so this workaround is unnecessary.  Retained for reference; can be
-# removed once 23.05.6 support is dropped.
-# define Build/Prepare
-#       rm -rf $(PKG_BUILD_DIR)
-#       mkdir -p $(PKG_BUILD_DIR)
-#       gzip -dc $(DL_DIR)/$(PKG_SOURCE) | tar -C $(PKG_BUILD_DIR) --strip-components=1 -xf -
-#       $(Build/Patch/Default)
-# endef
+# Override Build/Prepare to handle case-sensitive directory name
+# mismatch.  The codeload tarball top-level directory is EasyTier-x.y.z
+# (uppercase E) but PKG_BUILD_DIR uses lowercase easytier-x.y.z
+# (based on PKG_NAME).  --strip-components=1 flattens the tarball so
+# source files land directly in PKG_BUILD_DIR.
+define Build/Prepare
+	rm -rf $(PKG_BUILD_DIR)
+	mkdir -p $(PKG_BUILD_DIR)
+	gzip -dc $(DL_DIR)/$(PKG_SOURCE) | tar -C $(PKG_BUILD_DIR) --strip-components=1 -xf -
+	$(Build/Patch/Default)
+endef
 
 # Define install for easytier (full).  easytier-lite shares the same
 # install via a variable alias (jq-style).  RustBinPackage uses ifndef, so
