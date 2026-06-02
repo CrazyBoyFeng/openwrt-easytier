@@ -120,8 +120,8 @@ jobs:
           # on 32-bit MIPS.  --locked pins it to Cargo.lock's v0.9.0.
           if [ "${{ matrix.build_std }}" = "true" ]; then
             echo "=== mipsel: injecting -Z build-std via sed ==="
-            sed -i 's#^Build/Compile=\$(call Build/Compile/Cargo,easytier,--bin easytier-core --no-default-features)#Build/Compile=$(CARGO_PKG_VARS) cargo $(CARGO_PKG_ARGS) -Z build-std install -v --profile $(CARGO_PKG_PROFILE) --features "$(strip $(RUST_PKG_FEATURES))" --root $(PKG_INSTALL_DIR) --path "$(PKG_BUILD_DIR)/easytier" --bin easytier-core \&\& (command -v upx >/dev/null 2>\&1 \&\& upx --lzma --best $(PKG_INSTALL_DIR)/bin/easytier-core || true)#' package/easytier/Makefile
-            sed -i 's#^Build/Compile=\$(call Build/Compile/Cargo,easytier,--bin easytier-core)$#Build/Compile=$(CARGO_PKG_VARS) cargo $(CARGO_PKG_ARGS) -Z build-std install -v --profile $(CARGO_PKG_PROFILE) --root $(PKG_INSTALL_DIR) --path "$(PKG_BUILD_DIR)/easytier" --bin easytier-core \&\& (command -v upx >/dev/null 2>\&1 \&\& upx --lzma --best $(PKG_INSTALL_DIR)/bin/easytier-core || true)#' package/easytier/Makefile
+            sed -i 's#^Build/Compile=\$(call Build/Compile/Cargo,easytier,--bin easytier-core --no-default-features)#Build/Compile=$(CARGO_PKG_VARS) cargo $(CARGO_PKG_ARGS) -Z build-std=std,panic_abort install -v --profile $(CARGO_PKG_PROFILE) --features "$(strip $(RUST_PKG_FEATURES))" --root $(PKG_INSTALL_DIR) --path "$(PKG_BUILD_DIR)/easytier" --bin easytier-core \&\& (command -v upx >/dev/null 2>\&1 \&\& upx --lzma --best $(PKG_INSTALL_DIR)/bin/easytier-core || true)#' package/easytier/Makefile
+            sed -i 's#^Build/Compile=\$(call Build/Compile/Cargo,easytier,--bin easytier-core)$#Build/Compile=$(CARGO_PKG_VARS) cargo $(CARGO_PKG_ARGS) -Z build-std=std,panic_abort install -v --profile $(CARGO_PKG_PROFILE) --root $(PKG_INSTALL_DIR) --path "$(PKG_BUILD_DIR)/easytier" --bin easytier-core \&\& (command -v upx >/dev/null 2>\&1 \&\& upx --lzma --best $(PKG_INSTALL_DIR)/bin/easytier-core || true)#' package/easytier/Makefile
           fi
 
           # Select packages
@@ -153,7 +153,9 @@ jobs:
             pkg_name="easytier"
             if [ "$variant" = "lite" ]; then pkg_name="easytier-lite"; fi
             # Search in bin/packages/ only
-            pkg=$(find bin/packages -type f -name "${pkg_name}_*.${PKG_FMT}" 2>/dev/null | head -1)
+            # OpenWrt 25.12.4 apk uses hyphens: easytier-2.6.4-r1.apk
+            # (not underscores like ipk: easytier_2.6.4-r1.ipk).
+            pkg=$(find bin/packages -type f -name "${pkg_name}-*.${PKG_FMT}" 2>/dev/null | head -1)
             if [ -n "$pkg" ]; then
               # Extract easytier-core from the package.
               # apk = tar.gz (OpenWrt apk mkpkg format)
