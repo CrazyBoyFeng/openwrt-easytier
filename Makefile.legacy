@@ -71,10 +71,9 @@ endef
 # Copy prebuilt binary from PREBUILT_DIR (set by CI).
 # PREBUILT_DIR contains per-variant subdirs: full/easytier-core, lite/easytier-core.
 # $(or $(BUILD_VARIANT),full) handles the default variant.
-define Build/Compile
-	mkdir -p $(PKG_INSTALL_DIR)/bin
-	$(CP) $(PREBUILT_DIR)/$(or $(BUILD_VARIANT),full)/easytier-core $(PKG_INSTALL_DIR)/bin/
-endef
+# Single line (no define/endef) for sed-friendliness.
+# EASYTIER_COMPILE
+Build/Compile=mkdir -p $(PKG_INSTALL_DIR)/bin && $(CP) $(PREBUILT_DIR)/$(or $(BUILD_VARIANT),full)/easytier-core $(PKG_INSTALL_DIR)/bin/
 
 # ============ Install ============
 define Package/easytier/install

@@ -52,7 +52,7 @@ CARGO_PKG_VARS := $(filter-out \
 	$(CARGO_PKG_VARS))
 
 CARGO_PKG_VARS += CARGO_PROFILE_RELEASE_LTO=fat
-CARGO_PKG_VARS += CARGO_PROFILE_RELEASE_OPT_LEVEL=3
+CARGO_PKG_VARS += CARGO_PROFILE_RELEASE_OPT_LEVEL=z
 CARGO_PKG_VARS += CARGO_PROFILE_RELEASE_PANIC=abort
 CARGO_PKG_VARS += CARGO_PROFILE_RELEASE_STRIP=true
 
@@ -63,26 +63,6 @@ CARGO_PKG_VARS += PROTOC=$(STAGING_DIR_HOSTPKG)/bin/protoc
 # conflicts with musl cross target).  $(TOOLCHAIN_DIR) is defined in
 # rules.mk: staging_dir/toolchain-<arch>_gcc-<ver>_musl.
 CARGO_PKG_VARS += BINDGEN_EXTRA_CLANG_ARGS="-nostdinc -I$(TOOLCHAIN_DIR)/include -I$(TOOLCHAIN_DIR)/usr/include"
-
-# ============ Tier-3 target support (-Z build-std) ============
-# NOTE (legacy, for 23.05.6 SDK standalone build): When CARGO_BUILD_STD_FLAGS
-# is set in the environment (e.g. by CI for mipsel), redefine Build/Compile/Cargo
-# to inject the flag between "cargo" and "install".  In the current CI, 25.12.4
-# always compiles first and mipsel uses build-std; this ifdef is handled via
-# CI sed override in build.yml.  Retained for reference; can be removed once
-# 23.05.6 support is dropped.
-# ifdef CARGO_BUILD_STD_FLAGS
-# define Build/Compile/Cargo
-#       +$(CARGO_PKG_VARS) \
-#       cargo $(CARGO_BUILD_STD_FLAGS) install -v \
-#               --profile $(CARGO_PKG_PROFILE) \
-#               $(if $(strip $(RUST_PKG_FEATURES)),--features "$(strip $(RUST_PKG_FEATURES))") \
-#               --root $(PKG_INSTALL_DIR) \
-#               --path "$(PKG_BUILD_DIR)/$(if $(strip $(1)),$(strip $(1)))" \
-#               $(if $(filter --jobserver%,$(PKG_JOBS)),,-j1) \
-#               $(2)
-# endef
-# endif
 
 # ============ common ============
 define Package/easytier/Default
@@ -142,15 +122,22 @@ endif
 export CARGO_PROFILE_RELEASE_LTO=fat
 export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
 export CARGO_PROFILE_RELEASE_PANIC=abort
-export CARGO_PROFILE_RELEASE_OPT_LEVEL=3
+export CARGO_PROFILE_RELEASE_OPT_LEVEL=z
 export CARGO_PROFILE_RELEASE_STRIP=true
 
 # easytier is a workspace member, pass subdirectory path to cargo.
 # Only build easytier-core (skip easytier-cli which is not packaged).
+# Each Build/Compile is a single line (no backslash continuation)
+# so that CI sed can target it via the EASYTIER_COMPILE_* markers.
+
+# EASYTIER_COMPILE_LITE
 ifeq ($(BUILD_VARIANT),lite)
-Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core --no-default-features) && (command -v upx >/dev/null 2>&1 && upx --lzma --best $(PKG_INSTALL_DIR)/bin/easytier-core || true)
-else
-Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core) && (command -v upx >/dev/null 2>&1 && upx --lzma --best $(PKG_INSTALL_DIR)/bin/easytier-core || true)
+Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core --no-default-features)
+endif
+
+# EASYTIER_COMPILE_FULL
+ifeq ($(BUILD_VARIANT),full)
+Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core)
 endif
 
 # Override Build/Prepare to handle case-sensitive directory name

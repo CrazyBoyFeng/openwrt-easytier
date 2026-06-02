@@ -54,7 +54,7 @@ jobs:
           fi
 
       - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler clang libclang-dev zstd upx-ucl
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler clang libclang-dev zstd
 
       - name: Build packages
         timeout-minutes: 330
@@ -118,15 +118,13 @@ jobs:
           # --locked is critical: without it cargo resolves the latest
           # fastbloom from crates.io (v0.14.x with AtomicU64), which fails
           # on 32-bit MIPS.  --locked pins it to Cargo.lock's v0.9.0.
+          #
+          # sed uses EASYTIER_COMPILE_* comment markers as stable anchors:
+          # match the marker line, read next line (n), replace it entirely.
           if [ "${{ matrix.build_std }}" = "true" ]; then
             echo "=== mipsel: injecting -Z build-std via sed ==="
-            # Replace the entire Build/Compile assignment for BOTH variants.
-            # Use broad patterns (no end-of-line anchor) since lines have
-            # trailing "&& (upx ...)"  beyond the $(call ...).
-            # Lite: contains --no-default-features
-            sed -i 's#^Build/Compile=\$(call Build/Compile/Cargo,easytier,--bin easytier-core --no-default-features).*#Build/Compile=$(CARGO_PKG_VARS) cargo $(CARGO_PKG_ARGS) -Z build-std=std,panic_abort install -v --profile $(CARGO_PKG_PROFILE) --features "$(strip $(RUST_PKG_FEATURES))" --root $(PKG_INSTALL_DIR) --path "$(PKG_BUILD_DIR)/easytier" --bin easytier-core \&\& (command -v upx >/dev/null 2>\&1 \&\& upx --lzma --best $(PKG_INSTALL_DIR)/bin/easytier-core || true)#' package/easytier/Makefile
-            # Full: no --no-default-features.  Note: ") &&" with space.
-            sed -i 's#^Build/Compile=\$(call Build/Compile/Cargo,easytier,--bin easytier-core) &&.*#Build/Compile=$(CARGO_PKG_VARS) cargo $(CARGO_PKG_ARGS) -Z build-std=std,panic_abort install -v --profile $(CARGO_PKG_PROFILE) --root $(PKG_INSTALL_DIR) --path "$(PKG_BUILD_DIR)/easytier" --bin easytier-core \&\& (command -v upx >/dev/null 2>\&1 \&\& upx --lzma --best $(PKG_INSTALL_DIR)/bin/easytier-core || true)#' package/easytier/Makefile
+            sed -i '/^# EASYTIER_COMPILE_LITE/{n;s|.*|Build/Compile=$(CARGO_PKG_VARS) cargo $(CARGO_PKG_ARGS) -Z build-std=std,panic_abort install -v --profile $(CARGO_PKG_PROFILE) --features "$(strip $(RUST_PKG_FEATURES))" --root $(PKG_INSTALL_DIR) --path "$(PKG_BUILD_DIR)/easytier" --bin easytier-core --no-default-features|}' package/easytier/Makefile
+            sed -i '/^# EASYTIER_COMPILE_FULL/{n;s|.*|Build/Compile=$(CARGO_PKG_VARS) cargo $(CARGO_PKG_ARGS) -Z build-std=std,panic_abort install -v --profile $(CARGO_PKG_PROFILE) --root $(PKG_INSTALL_DIR) --path "$(PKG_BUILD_DIR)/easytier" --bin easytier-core|}' package/easytier/Makefile
           fi
 
           # Select packages
