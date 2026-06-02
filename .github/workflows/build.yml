@@ -148,46 +148,26 @@ jobs:
           # Save prebuilt binaries for the 23.05.6 legacy build.
           # Save per-variant since full and lite produce different binaries.
           #
-          # IMPORTANT: We cannot look in build_dir/*/easytier-*/target-$variant/
-          # because OpenWrt's post-build autoremove wipes the build dir
-          # (including cargo target/) after each variant is packaged.
-          # Extract directly from bin/packages/ apk files instead.
+          # We copy from .pkgdir rather than extracting from the apk.
+          # OpenWrt's post-build autoremove wipes the build dir but EXCLUDES
+          # .pkgdir, so the installed binaries survive there.
+          # Extracting from apk is fragile (Alpine format has nested
+          # data.tar.gz, and the outer layer may be zstd-compressed).
           mkdir -p "$PREBUILT_DIR/full" "$PREBUILT_DIR/lite"
           for variant in full lite; do
-            # Package names: "easytier" for full, "easytier-lite" for lite
-            pkg_name="easytier"
-            if [ "$variant" = "lite" ]; then pkg_name="easytier-lite"; fi
-            # Search in bin/packages/ only
-            # OpenWrt 25.12.4 apk uses hyphens: easytier-2.6.4-r1.apk
-            # (not underscores like ipk: easytier_2.6.4-r1.ipk).
-            pkg=$(find bin/packages -type f -name "${pkg_name}-*.${PKG_FMT}" 2>/dev/null | head -1)
-            if [ -n "$pkg" ]; then
-              # Extract easytier-core from the package.
-              # OpenWrt 25.12.4 apk (Alpine format) is a tar.gz containing
-              # data.tar.gz which holds the actual files.  Must extract
-              # two layers: outer tar.gz -> data.tar.* -> files.
-              tmp=$(mktemp -d)
-              tar xzf "$pkg" -C "$tmp" 2>/dev/null || true
-              # Find and extract the data tarball (could be .gz, .zst, .xz)
-              data_tar=$(find "$tmp" -name 'data.tar.*' -type f 2>/dev/null | head -1)
-              if [ -n "$data_tar" ]; then
-                case "$data_tar" in
-                  *.gz)  tar xzf "$data_tar" -C "$tmp" 2>/dev/null || true ;;
-                  *.zst) tar --zstd -xf "$data_tar" -C "$tmp" 2>/dev/null || true ;;
-                  *.xz)  tar xJf "$data_tar" -C "$tmp" 2>/dev/null || true ;;
-                  *)     tar xf "$data_tar" -C "$tmp" 2>/dev/null || true ;;
-                esac
-              fi
-              bin=$(find "$tmp" -name "easytier-core" -type f 2>/dev/null | head -1)
-              if [ -n "$bin" ]; then
-                cp "$bin" "$PREBUILT_DIR/$variant/"
-                echo "Saved prebuilt $variant binary: $(ls -lh "$PREBUILT_DIR/$variant/easytier-core" | awk '{print $5}')"
-              else
-                echo "WARNING: easytier-core not found in $pkg"
-              fi
-              rm -rf "$tmp"
+            # .pkgdir uses the install package name (easytier for full,
+            # easytier-lite for lite).  The build dir path is:
+            # build_dir/target-*/easytier-{variant}/{source-subdir}/.pkgdir/{name}/usr/bin/
+            # Use -path with glob to avoid case-sensitivity issues with
+            # the source subdir name (EasyTier-* vs easytier-*).
+            pkgdir_name="easytier"
+            if [ "$variant" = "lite" ]; then pkgdir_name="easytier-lite"; fi
+            bin=$(find build_dir -path "*/easytier-${variant}*/.pkgdir/${pkgdir_name}/usr/bin/easytier-core" -type f 2>/dev/null | head -1)
+            if [ -n "$bin" ]; then
+              cp "$bin" "$PREBUILT_DIR/$variant/"
+              echo "Saved prebuilt $variant binary: $(ls -lh "$PREBUILT_DIR/$variant/easytier-core" | awk '{print $5}')"
             else
-              echo "WARNING: package for variant '$variant' not found in bin/packages/"
+              echo "WARNING: easytier-core not found in .pkgdir for variant '$variant'"
             fi
           done
 
