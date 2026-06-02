@@ -27,10 +27,12 @@ PKG_BUILD_DEPENDS:=rust/host protobuf/host
 PKG_BUILD_PARALLEL:=1
 
 include $(INCLUDE_DIR)/package.mk
-# rust-package.mk uses RUST_PKG_LOCKED ?= 1 at include time to set
-# CARGO_PKG_ARGS.  Must override BEFORE the include so CARGO_PKG_ARGS
-# is empty (no --locked) instead of --locked.
-RUST_PKG_LOCKED:=0
+# Lock Cargo dependencies to the versions in Cargo.lock.
+# Without --locked, cargo resolves the latest versions from crates.io,
+# which can break tier-3 targets (e.g. mipsel).  Specifically,
+# fastbloom v0.14.1 introduced AtomicU64 which is unavailable on
+# 32-bit MIPS; Cargo.lock pins it to v0.9.0 which works on all archs.
+RUST_PKG_LOCKED:=1
 
 include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk
 

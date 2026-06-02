@@ -113,13 +113,15 @@ jobs:
           # BINDGEN_EXTRA_CLANG_ARGS is now correct in Makefile (uses
           # $(TOOLCHAIN_DIR) with -nostdinc), no sed override needed.
 
-          # For mipsel (tier-3), set CARGO_BUILD_STD_FLAGS so Makefile's
-          # ifdef injects -Z build-std into Build/Compile/Cargo.
-          # NOTE: This ifdef is commented out in the current Makefile (25.12.4
-          # only), so CI must handle build-std via sed override instead.
+          # For mipsel (tier-3), inject -Z build-std and $(CARGO_PKG_ARGS)
+          # (which includes --locked) into both variant Build/Compile lines.
+          # --locked is critical: without it cargo resolves the latest
+          # fastbloom from crates.io (v0.14.x with AtomicU64), which fails
+          # on 32-bit MIPS.  --locked pins it to Cargo.lock's v0.9.0.
           if [ "${{ matrix.build_std }}" = "true" ]; then
             echo "=== mipsel: injecting -Z build-std via sed ==="
-            sed -i 's#^Build/Compile=\$(call Build/Compile/Cargo,easytier,--bin easytier-core --no-default-features)#Build/Compile=$(CARGO_PKG_VARS) cargo -Z build-std install -v --profile $(CARGO_PKG_PROFILE) --features "$(strip $(RUST_PKG_FEATURES))" --root $(PKG_INSTALL_DIR) --path "$(PKG_BUILD_DIR)/easytier" --bin easytier-core \&\& (command -v upx >/dev/null 2>\&1 \&\& upx --lzma --best $(PKG_INSTALL_DIR)/bin/easytier-core || true)#' package/easytier/Makefile
+            sed -i 's#^Build/Compile=\$(call Build/Compile/Cargo,easytier,--bin easytier-core --no-default-features)#Build/Compile=$(CARGO_PKG_VARS) cargo $(CARGO_PKG_ARGS) -Z build-std install -v --profile $(CARGO_PKG_PROFILE) --features "$(strip $(RUST_PKG_FEATURES))" --root $(PKG_INSTALL_DIR) --path "$(PKG_BUILD_DIR)/easytier" --bin easytier-core \&\& (command -v upx >/dev/null 2>\&1 \&\& upx --lzma --best $(PKG_INSTALL_DIR)/bin/easytier-core || true)#' package/easytier/Makefile
+            sed -i 's#^Build/Compile=\$(call Build/Compile/Cargo,easytier,--bin easytier-core)$#Build/Compile=$(CARGO_PKG_VARS) cargo $(CARGO_PKG_ARGS) -Z build-std install -v --profile $(CARGO_PKG_PROFILE) --root $(PKG_INSTALL_DIR) --path "$(PKG_BUILD_DIR)/easytier" --bin easytier-core \&\& (command -v upx >/dev/null 2>\&1 \&\& upx --lzma --best $(PKG_INSTALL_DIR)/bin/easytier-core || true)#' package/easytier/Makefile
           fi
 
           # Select packages
