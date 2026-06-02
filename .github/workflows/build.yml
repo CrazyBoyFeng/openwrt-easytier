@@ -120,8 +120,13 @@ jobs:
           # on 32-bit MIPS.  --locked pins it to Cargo.lock's v0.9.0.
           if [ "${{ matrix.build_std }}" = "true" ]; then
             echo "=== mipsel: injecting -Z build-std via sed ==="
-            sed -i 's#^Build/Compile=\$(call Build/Compile/Cargo,easytier,--bin easytier-core --no-default-features)#Build/Compile=$(CARGO_PKG_VARS) cargo $(CARGO_PKG_ARGS) -Z build-std=std,panic_abort install -v --profile $(CARGO_PKG_PROFILE) --features "$(strip $(RUST_PKG_FEATURES))" --root $(PKG_INSTALL_DIR) --path "$(PKG_BUILD_DIR)/easytier" --bin easytier-core \&\& (command -v upx >/dev/null 2>\&1 \&\& upx --lzma --best $(PKG_INSTALL_DIR)/bin/easytier-core || true)#' package/easytier/Makefile
-            sed -i 's#^Build/Compile=\$(call Build/Compile/Cargo,easytier,--bin easytier-core)$#Build/Compile=$(CARGO_PKG_VARS) cargo $(CARGO_PKG_ARGS) -Z build-std=std,panic_abort install -v --profile $(CARGO_PKG_PROFILE) --root $(PKG_INSTALL_DIR) --path "$(PKG_BUILD_DIR)/easytier" --bin easytier-core \&\& (command -v upx >/dev/null 2>\&1 \&\& upx --lzma --best $(PKG_INSTALL_DIR)/bin/easytier-core || true)#' package/easytier/Makefile
+            # Replace the entire Build/Compile assignment for BOTH variants.
+            # Use broad patterns (no end-of-line anchor) since lines have
+            # trailing "&& (upx ...)"  beyond the $(call ...).
+            # Lite: contains --no-default-features
+            sed -i 's#^Build/Compile=\$(call Build/Compile/Cargo,easytier,--bin easytier-core --no-default-features).*#Build/Compile=$(CARGO_PKG_VARS) cargo $(CARGO_PKG_ARGS) -Z build-std=std,panic_abort install -v --profile $(CARGO_PKG_PROFILE) --features "$(strip $(RUST_PKG_FEATURES))" --root $(PKG_INSTALL_DIR) --path "$(PKG_BUILD_DIR)/easytier" --bin easytier-core \&\& (command -v upx >/dev/null 2>\&1 \&\& upx --lzma --best $(PKG_INSTALL_DIR)/bin/easytier-core || true)#' package/easytier/Makefile
+            # Full: no --no-default-features.  Note: ") &&" with space.
+            sed -i 's#^Build/Compile=\$(call Build/Compile/Cargo,easytier,--bin easytier-core) &&.*#Build/Compile=$(CARGO_PKG_VARS) cargo $(CARGO_PKG_ARGS) -Z build-std=std,panic_abort install -v --profile $(CARGO_PKG_PROFILE) --root $(PKG_INSTALL_DIR) --path "$(PKG_BUILD_DIR)/easytier" --bin easytier-core \&\& (command -v upx >/dev/null 2>\&1 \&\& upx --lzma --best $(PKG_INSTALL_DIR)/bin/easytier-core || true)#' package/easytier/Makefile
           fi
 
           # Select packages
@@ -158,9 +163,21 @@ jobs:
             pkg=$(find bin/packages -type f -name "${pkg_name}-*.${PKG_FMT}" 2>/dev/null | head -1)
             if [ -n "$pkg" ]; then
               # Extract easytier-core from the package.
-              # apk = tar.gz (OpenWrt apk mkpkg format)
+              # OpenWrt 25.12.4 apk (Alpine format) is a tar.gz containing
+              # data.tar.gz which holds the actual files.  Must extract
+              # two layers: outer tar.gz -> data.tar.* -> files.
               tmp=$(mktemp -d)
               tar xzf "$pkg" -C "$tmp" 2>/dev/null || true
+              # Find and extract the data tarball (could be .gz, .zst, .xz)
+              data_tar=$(find "$tmp" -name 'data.tar.*' -type f 2>/dev/null | head -1)
+              if [ -n "$data_tar" ]; then
+                case "$data_tar" in
+                  *.gz)  tar xzf "$data_tar" -C "$tmp" 2>/dev/null || true ;;
+                  *.zst) tar --zstd -xf "$data_tar" -C "$tmp" 2>/dev/null || true ;;
+                  *.xz)  tar xJf "$data_tar" -C "$tmp" 2>/dev/null || true ;;
+                  *)     tar xf "$data_tar" -C "$tmp" 2>/dev/null || true ;;
+                esac
+              fi
               bin=$(find "$tmp" -name "easytier-core" -type f 2>/dev/null | head -1)
               if [ -n "$bin" ]; then
                 cp "$bin" "$PREBUILT_DIR/$variant/"
