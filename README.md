@@ -13,6 +13,18 @@ EasyTier is a simple, decentralized and secure mesh VPN with WireGuard support, 
 
 Removed from lite: `wireguard`, `socks5`, `smoltcp`. Users can install standalone OS packages (`wireguard-tools`, `microsocks`) if needed.
 
+**Lite variant limitations on UCI options:**
+
+| Option | Impact in lite | Behavior |
+|--------|---------------|----------|
+| `socks5` | Not available | Binary rejects with error on startup |
+| `vpn_portal` | No effect | Silently accepted, but WireGuard portal is not started |
+| `use_smoltcp` | No effect | Silently accepted, but user-space TCP stack is not compiled |
+| `encryption_algorithm = cha-cha20` | Not available | Binary rejects with parse error |
+| `wg://` in `peers`/`listeners` | Not available | Binary rejects with parse error |
+
+> **Note:** Both variants share the same `init.d` script and config template, so these options appear in `/etc/config/easytier` regardless of which variant is installed.
+
 Both variants install `easytier-core` binary only. No `easytier-cli` is included.
 
 ## Quick Start
@@ -186,7 +198,7 @@ Options are following the [official documentation](https://easytier.cn/guide/net
 
 | Option | Type | Default | CLI Equivalent | Description |
 |--------|------|---------|---------------|-------------|
-| `listeners` | list | (defaults) | `--listeners` | Listener URLs (tcp, udp, ws, wss, quic, wg, faketcp) |
+| `listeners` | list | (defaults) | `--listeners` | Listener URLs (tcp, udp, ws, wss, quic, wg, faketcp); `wg://` not available in lite |
 | `mapped_listeners` | list | - | `--mapped-listeners` | Public address mapping for NAT traversal |
 | `no_listener` | bool | `0` | `--no-listener` | Don't listen on any port |
 | `default_protocol` | string | (auto) | `--default-protocol` | Default protocol for peer connections |
@@ -195,9 +207,9 @@ Options are following the [official documentation](https://easytier.cn/guide/net
 
 | Option | Type | Default | CLI Equivalent | Description |
 |--------|------|---------|---------------|-------------|
-| `vpn_portal` | string | (empty) | `--vpn-portal` | VPN portal URL, e.g. `wg://0.0.0.0:11010/10.14.14.0/24` |
+| `vpn_portal` | string | (empty) | `--vpn-portal` | VPN portal URL, e.g. `wg://0.0.0.0:11010/10.14.14.0/24` (**no effect in lite**) |
 | `disable_encryption` | bool | `0` | `--disable-encryption` | Disable encryption |
-| `encryption_algorithm` | string | (aes-gcm) | `--encryption-algorithm` | `xor`, `chacha20`, `aes-gcm`, `aes-256-gcm`, etc. |
+| `encryption_algorithm` | string | (aes-gcm) | `--encryption-algorithm` | `xor`, `chacha20` (**not in lite**), `aes-gcm`, `aes-256-gcm` |
 | `multi_thread` | bool | `0` | `--multi-thread` | Enable multi-threaded runtime |
 | `multi_thread_count` | uint | (2) | `--multi-thread-count` | Thread count (must be > 2, only with multi-thread) |
 | `disable_ipv6` | bool | `0` | `--disable-ipv6` | Disable IPv6 |
@@ -208,7 +220,7 @@ Options are following the [official documentation](https://easytier.cn/guide/net
 | `enable_exit_node` | bool | `0` | `--enable-exit-node` | Allow this node to be an exit node |
 | `proxy_forward_by_system` | bool | `0` | `--proxy-forward-by-system` | Forward subnet proxy via kernel routing |
 | `no_tun` | bool | `0` | `--no-tun` | Don't create TUN device |
-| `use_smoltcp` | bool | `0` | `--use-smoltcp` | Enable smoltcp stack for subnet proxy and KCP |
+| `use_smoltcp` | bool | `0` | `--use-smoltcp` | Enable smoltcp stack for subnet proxy and KCP (**no effect in lite**) |
 | `manual_routes` | list | - | `--manual-routes` | Manual route CIDRs (disables subnet proxy) |
 | `relay_network_whitelist` | string | (empty) | `--relay-network-whitelist` | Only relay traffic for whitelisted networks |
 | `p2p_only` | bool | `0` | `--p2p-only` | Only communicate with established P2P peers |
@@ -221,7 +233,7 @@ Options are following the [official documentation](https://easytier.cn/guide/net
 | `disable_upnp` | bool | `0` | `--disable-upnp` | Disable UPnP/NAT-PMP automatic port mapping |
 | `enable_udp_broadcast_relay` | bool | `0` | `--enable-udp-broadcast-relay` | Enable UDP broadcast relay (Windows only) |
 | `relay_all_peer_rpc` | bool | `0` | `--relay-all-peer-rpc` | Relay all peer RPC packets |
-| `socks5` | string | (empty) | `--socks5` | SOCKS5 proxy port, e.g. `1080` |
+| `socks5` | string | (empty) | `--socks5` | SOCKS5 proxy port, e.g. `1080` (**not available in lite**) |
 | `compression` | string | (none) | `--compression` | `none` or `zstd` |
 | `bind_device` | string | (empty) | `--bind-device` | Bind connector sockets to physical device |
 | `enable_kcp_proxy` | bool | `0` | `--enable-kcp-proxy` | Use KCP proxy for TCP streams |
