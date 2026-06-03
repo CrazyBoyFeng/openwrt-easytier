@@ -153,7 +153,7 @@ jobs:
             name="${base%.apk}"
             if [ "$base" != "$name" ]; then
               # apk: insert PKGARCH before .apk (matches ipk convention)
-              cp "$f" "$WORKSPACE/output/$SDK_VER/${name}_${PKGARCH}.apk"
+              cp "$f" "$WORKSPACE/output/$SDK_VER/${name}-${PKGARCH}.apk"
             else
               # ipk already contains arch, keep as-is
               cp "$f" "$WORKSPACE/output/$SDK_VER/"
