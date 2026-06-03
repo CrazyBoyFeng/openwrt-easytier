@@ -46,10 +46,10 @@ include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk
 # Fix: filter out the conflicting profile keys, then append our preferred
 # values so that CARGO_PKG_VARS and our exports are consistent.
 CARGO_PKG_VARS := $(filter-out \
-	CARGO_PROFILE_RELEASE_LTO=% \
-	CARGO_PROFILE_RELEASE_OPT_LEVEL=% \
-	CARGO_PROFILE_RELEASE_PANIC=%, \
-	$(CARGO_PKG_VARS))
+        CARGO_PROFILE_RELEASE_LTO=% \
+        CARGO_PROFILE_RELEASE_OPT_LEVEL=% \
+        CARGO_PROFILE_RELEASE_PANIC=%, \
+        $(CARGO_PKG_VARS))
 
 CARGO_PKG_VARS += CARGO_PROFILE_RELEASE_LTO=fat
 CARGO_PKG_VARS += CARGO_PROFILE_RELEASE_OPT_LEVEL=z
@@ -95,11 +95,11 @@ define Package/easytier-lite/description
   Suitable for routers with limited flash storage.
 endef
 
-# ============ easytier (full) ============
+# ============ easytier (default) ===========
 define Package/easytier
   $(call Package/easytier/Default)
-  TITLE+= (full build)
-  VARIANT:=full
+  TITLE+= (default build)
+  VARIANT:=default
   DEFAULT_VARIANT:=1
   CONFLICTS:=easytier-lite
 endef
@@ -107,7 +107,7 @@ endef
 define Package/easytier/description
   $(call Package/easytier/Default/description)
   .
-  This full build includes all features: wireguard, socks5, smoltcp.
+  This default build includes all default Cargo features: wireguard, socks5, smoltcp.
 endef
 
 # ============ Build/Compile ============
@@ -135,8 +135,8 @@ ifeq ($(BUILD_VARIANT),lite)
 Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core --no-default-features)
 endif
 
-ifeq ($(BUILD_VARIANT),full)
-# EASYTIER_COMPILE_FULL
+ifeq ($(BUILD_VARIANT),default)
+# EASYTIER_COMPILE_DEFAULT
 Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core)
 endif
 
@@ -146,22 +146,22 @@ endif
 # (based on PKG_NAME).  --strip-components=1 flattens the tarball so
 # source files land directly in PKG_BUILD_DIR.
 define Build/Prepare
-	rm -rf $(PKG_BUILD_DIR)
-	mkdir -p $(PKG_BUILD_DIR)
-	gzip -dc $(DL_DIR)/$(PKG_SOURCE) | tar -C $(PKG_BUILD_DIR) --strip-components=1 -xf -
-	$(Build/Patch/Default)
+        rm -rf $(PKG_BUILD_DIR)
+        mkdir -p $(PKG_BUILD_DIR)
+        gzip -dc $(DL_DIR)/$(PKG_SOURCE) | tar -C $(PKG_BUILD_DIR) --strip-components=1 -xf -
+        $(Build/Patch/Default)
 endef
 
-# Define install for easytier (full).  easytier-lite shares the same
+# Define install for easytier (default).  easytier-lite shares the same
 # install via a variable alias (jq-style).  RustBinPackage uses ifndef, so
 # defining install here prevents it from generating a duplicate default rule.
 define Package/easytier/install
-	$(INSTALL_DIR) $(1)/usr/bin
-	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/bin/easytier-core $(1)/usr/bin
-	$(INSTALL_DIR) $(1)/etc/config
-	$(INSTALL_CONF) ./files/etc/config/easytier $(1)/etc/config/easytier
-	$(INSTALL_DIR) $(1)/etc/init.d
-	$(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
+        $(INSTALL_DIR) $(1)/usr/bin
+        $(INSTALL_BIN) $(PKG_INSTALL_DIR)/bin/easytier-core $(1)/usr/bin
+        $(INSTALL_DIR) $(1)/etc/config
+        $(INSTALL_CONF) ./files/etc/config/easytier $(1)/etc/config/easytier
+        $(INSTALL_DIR) $(1)/etc/init.d
+        $(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
 endef
 
 Package/easytier-lite/install = $(Package/easytier/install)

@@ -124,7 +124,7 @@ jobs:
           if [ "${{ matrix.build_std }}" = "true" ]; then
             echo "=== mipsel: injecting -Z build-std via sed ==="
             sed -i '/^# EASYTIER_COMPILE_LITE/{n;s|.*|Build/Compile=$(CARGO_PKG_VARS) cargo $(CARGO_PKG_ARGS) -Z build-std=std,panic_abort install -v --profile $(CARGO_PKG_PROFILE) --features "$(strip $(RUST_PKG_FEATURES))" --root $(PKG_INSTALL_DIR) --path "$(PKG_BUILD_DIR)/easytier" --bin easytier-core --no-default-features|}' package/easytier/Makefile
-            sed -i '/^# EASYTIER_COMPILE_FULL/{n;s|.*|Build/Compile=$(CARGO_PKG_VARS) cargo $(CARGO_PKG_ARGS) -Z build-std=std,panic_abort install -v --profile $(CARGO_PKG_PROFILE) --root $(PKG_INSTALL_DIR) --path "$(PKG_BUILD_DIR)/easytier" --bin easytier-core|}' package/easytier/Makefile
+            sed -i '/^# EASYTIER_COMPILE_DEFAULT/{n;s|.*|Build/Compile=$(CARGO_PKG_VARS) cargo $(CARGO_PKG_ARGS) -Z build-std=std,panic_abort install -v --profile $(CARGO_PKG_PROFILE) --root $(PKG_INSTALL_DIR) --path "$(PKG_BUILD_DIR)/easytier" --bin easytier-core|}' package/easytier/Makefile
           fi
 
           # Select packages
@@ -133,7 +133,7 @@ jobs:
 
           echo "=== Building packages ($PKG_FMT) ==="
           # BuildPackage generates compile targets for ALL variants
-          # (full + lite), so a single make package/easytier/compile
+          # (default + lite), so a single make package/easytier/compile
           # builds both.  Separate easytier-lite/compile is wrong:
           # easytier-lite has VARIANT:=lite so its target is
           # package/easytier/lite/compile (not package/easytier-lite/compile).
@@ -144,16 +144,16 @@ jobs:
           find bin/packages -type f -name 'easytier*' -exec cp {} "$WORKSPACE/output/$SDK_VER/" \; 2>/dev/null || true
 
           # Save prebuilt binaries for the 23.05.6 legacy build.
-          # Save per-variant since full and lite produce different binaries.
+          # Save per-variant since default and lite produce different binaries.
           #
           # We copy from .pkgdir rather than extracting from the apk.
           # OpenWrt's post-build autoremove wipes the build dir but EXCLUDES
           # .pkgdir, so the installed binaries survive there.
           # Extracting from apk is fragile (Alpine format has nested
           # data.tar.gz, and the outer layer may be zstd-compressed).
-          mkdir -p "$PREBUILT_DIR/full" "$PREBUILT_DIR/lite"
-          for variant in full lite; do
-            # .pkgdir uses the install package name (easytier for full,
+          mkdir -p "$PREBUILT_DIR/default" "$PREBUILT_DIR/lite"
+          for variant in default lite; do
+            # .pkgdir uses the install package name (easytier for default,
             # easytier-lite for lite).  The build dir path is:
             # build_dir/target-*/easytier-{variant}/{source-subdir}/.pkgdir/{name}/usr/bin/
             # Use -path with glob to avoid case-sensitivity issues with
