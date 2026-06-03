@@ -1,6 +1,6 @@
 # openwrt-easytier
 
-[EasyTier](https://github.com/EasyTier/EasyTier) OpenWrt package (lite & full variants of easytier-core).
+[EasyTier](https://github.com/EasyTier/EasyTier) OpenWrt package (lite & default variants of easytier-core).
 
 EasyTier is a simple, decentralized and secure mesh VPN with WireGuard support, connecting your devices into a single virtual LAN, even behind NAT.
 
@@ -9,7 +9,7 @@ EasyTier is a simple, decentralized and secure mesh VPN with WireGuard support, 
 | Variant | Package | Features |
 |---------|---------|----------|
 | lite | `easytier-lite` | tun, magic-dns, quic, kcp, websocket, faketcp, zstd, aes-gcm |
-| full | `easytier` | all default features |
+| default | `easytier` | all default features |
 
 Removed from lite: `wireguard`, `socks5`, `smoltcp`. Users can install standalone OS packages (`wireguard-tools`, `microsocks`) if needed.
 
@@ -308,7 +308,7 @@ git clone https://github.com/CrazyBoyFeng/openwrt-easytier.git package/easytier
 # Configure
 make menuconfig
 
-# Build full variant
+# Build default variant
 make package/easytier/compile V=s
 
 # Build lite variant
