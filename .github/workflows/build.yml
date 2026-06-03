@@ -140,8 +140,21 @@ jobs:
           make package/easytier/compile V=s || make package/easytier/compile V=s
 
           # Collect artifacts — only easytier packages from bin/packages/.
+          # apk filenames lack architecture info (e.g. easytier-2.6.4-r1.apk),
+          # so rename them with the target arch slug to avoid overwrites when
+          # release job merges artifacts from multiple targets.
           mkdir -p "$WORKSPACE/output/$SDK_VER"
-          find bin/packages -type f -name 'easytier*' -exec cp {} "$WORKSPACE/output/$SDK_VER/" \; 2>/dev/null || true
+          for f in $(find bin/packages -type f -name 'easytier*' 2>/dev/null); do
+            base="$(basename "$f")"
+            name="${base%.apk}"
+            if [ "$base" != "$name" ]; then
+              # apk: insert arch slug before .apk
+              cp "$f" "$WORKSPACE/output/$SDK_VER/${name}_${SLUG}.apk"
+            else
+              # ipk already contains arch, keep as-is
+              cp "$f" "$WORKSPACE/output/$SDK_VER/"
+            fi
+          done
 
           # Save prebuilt binaries for the 23.05.6 legacy build.
           # Save per-variant since default and lite produce different binaries.
