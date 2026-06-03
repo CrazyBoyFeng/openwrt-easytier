@@ -8,10 +8,10 @@ EasyTier is a simple, decentralized and secure mesh VPN with WireGuard support, 
 
 | Variant | Package | Features |
 |---------|---------|----------|
-| lite | `easytier-lite` | tun, magic-dns, quic, kcp, websocket, faketcp, zstd, aes-gcm |
+| lite | `easytier-lite` | tun, magic-dns, kcp, faketcp, zstd, aes-gcm |
 | default | `easytier` | all default features |
 
-Removed from lite: `wireguard`, `socks5`, `smoltcp`. Users can install standalone OS packages (`wireguard-tools`, `microsocks`) if needed.
+Removed from lite: `wireguard`, `socks5`, `smoltcp`, `quic`, `websocket`. Users can install standalone OS packages (`wireguard-tools`, `microsocks`) if needed.
 
 **Lite variant limitations on UCI options:**
 
@@ -22,6 +22,9 @@ Removed from lite: `wireguard`, `socks5`, `smoltcp`. Users can install standalon
 | `use_smoltcp` | No effect | Silently accepted, but user-space TCP stack is not compiled |
 | `encryption_algorithm = cha-cha20` | Not available | Binary rejects with parse error |
 | `wg://` in `peers`/`listeners` | Not available | Binary rejects with parse error |
+| `quic://` in `peers`/`listeners` | Not available | Binary rejects with parse error |
+| `ws://` / `wss://` in `peers`/`listeners` | Not available | Binary rejects with parse error |
+| `enable_quic_proxy` etc. | No effect | Silently accepted, but QUIC proxy is not compiled |
 
 > **Note:** Both variants share the same `init.d` script and config template, so these options appear in `/etc/config/easytier` regardless of which variant is installed.
 
@@ -198,7 +201,7 @@ Options are following the [official documentation](https://easytier.cn/guide/net
 
 | Option | Type | Default | CLI Equivalent | Description |
 |--------|------|---------|---------------|-------------|
-| `listeners` | list | (defaults) | `--listeners` | Listener URLs (tcp, udp, ws, wss, quic, wg, faketcp); `wg://` not available in lite |
+| `listeners` | list | (defaults) | `--listeners` | Listener URLs (tcp, udp, faketcp); `wg://`, `quic://`, `ws://`, `wss://` not available in lite |
 | `mapped_listeners` | list | - | `--mapped-listeners` | Public address mapping for NAT traversal |
 | `no_listener` | bool | `0` | `--no-listener` | Don't listen on any port |
 | `default_protocol` | string | (auto) | `--default-protocol` | Default protocol for peer connections |
@@ -238,8 +241,8 @@ Options are following the [official documentation](https://easytier.cn/guide/net
 | `bind_device` | string | (empty) | `--bind-device` | Bind connector sockets to physical device |
 | `enable_kcp_proxy` | bool | `0` | `--enable-kcp-proxy` | Use KCP proxy for TCP streams |
 | `disable_kcp_input` | bool | `0` | `--disable-kcp-input` | Disallow KCP proxy input from other nodes |
-| `enable_quic_proxy` | bool | `0` | `--enable-quic-proxy` | Use QUIC proxy for TCP streams |
-| `disable_quic_input` | bool | `0` | `--disable-quic-input` | Disallow QUIC proxy input from other nodes |
+| `enable_quic_proxy` | bool | `0` | `--enable-quic-proxy` | Use QUIC proxy for TCP streams (**no effect in lite**) |
+| `disable_quic_input` | bool | `0` | `--disable-quic-input` | Disallow QUIC proxy input from other nodes (**no effect in lite**) |
 | `port_forward` | list | - | `--port-forward` | Port forwarding rules, e.g. `udp://0.0.0.0:12345/10.126.126.1:23456` |
 | `accept_dns` | bool | `0` | `--accept-dns` | Enable Magic DNS |
 | `tld_dns_zone` | string | `et.net` | `--tld-dns-zone` | TLD DNS zone for Magic DNS |
@@ -250,8 +253,8 @@ Options are following the [official documentation](https://easytier.cn/guide/net
 | `udp_whitelist` | string | (empty) | `--udp-whitelist` | UDP port whitelist (supports ranges) |
 | `disable_relay_kcp` | bool | `0` | `--disable-relay-kcp` | Disallow forwarding KCP packets |
 | `enable_relay_foreign_network_kcp` | bool | `0` | `--enable-relay-foreign-network-kcp` | Allow relaying foreign network KCP |
-| `disable_relay_quic` | bool | `0` | `--disable-relay-quic` | Disallow forwarding QUIC packets |
-| `enable_relay_foreign_network_quic` | bool | `0` | `--enable-relay-foreign-network-quic` | Allow relaying foreign network QUIC |
+| `disable_relay_quic` | bool | `0` | `--disable-relay-quic` | Disallow forwarding QUIC packets (**no effect in lite**) |
+| `enable_relay_foreign_network_quic` | bool | `0` | `--enable-relay-foreign-network-quic` | Allow relaying foreign network QUIC (**no effect in lite**) |
 | `stun_servers` | list | - | `--stun-servers` | Override default STUN server list |
 | `stun_servers_v6` | list | - | `--stun-servers-v6` | Override default IPv6 STUN server list |
 

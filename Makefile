@@ -91,8 +91,8 @@ endef
 define Package/easytier-lite/description
   $(call Package/easytier/Default/description)
   .
-  This lite build removes wireguard, socks5 and smoltcp features.
-  Suitable for routers with limited flash storage.
+  This lite build removes wireguard, socks5, smoltcp, quic and
+  websocket features. Suitable for routers with limited flash storage.
 endef
 
 # ============ easytier (default) ===========
@@ -112,7 +112,7 @@ endef
 
 # ============ Build/Compile ============
 ifeq ($(BUILD_VARIANT),lite)
-  RUST_PKG_FEATURES:=tun,magic-dns,quic,kcp,websocket,faketcp,zstd,aes-gcm
+  RUST_PKG_FEATURES:=tun,magic-dns,kcp,faketcp,zstd,aes-gcm
 endif
 
 # Cargo profile optimizations for release builds.
@@ -146,22 +146,22 @@ endif
 # (based on PKG_NAME).  --strip-components=1 flattens the tarball so
 # source files land directly in PKG_BUILD_DIR.
 define Build/Prepare
-	rm -rf $(PKG_BUILD_DIR)
-	mkdir -p $(PKG_BUILD_DIR)
-	gzip -dc $(DL_DIR)/$(PKG_SOURCE) | tar -C $(PKG_BUILD_DIR) --strip-components=1 -xf -
-	$(Build/Patch/Default)
+        rm -rf $(PKG_BUILD_DIR)
+        mkdir -p $(PKG_BUILD_DIR)
+        gzip -dc $(DL_DIR)/$(PKG_SOURCE) | tar -C $(PKG_BUILD_DIR) --strip-components=1 -xf -
+        $(Build/Patch/Default)
 endef
 
 # Define install for easytier (default).  easytier-lite shares the same
 # install via a variable alias (jq-style).  RustBinPackage uses ifndef, so
 # defining install here prevents it from generating a duplicate default rule.
 define Package/easytier/install
-	$(INSTALL_DIR) $(1)/usr/bin
-	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/bin/easytier-core $(1)/usr/bin
-	$(INSTALL_DIR) $(1)/etc/config
-	$(INSTALL_CONF) ./files/etc/config/easytier $(1)/etc/config/easytier
-	$(INSTALL_DIR) $(1)/etc/init.d
-	$(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
+        $(INSTALL_DIR) $(1)/usr/bin
+        $(INSTALL_BIN) $(PKG_INSTALL_DIR)/bin/easytier-core $(1)/usr/bin
+        $(INSTALL_DIR) $(1)/etc/config
+        $(INSTALL_CONF) ./files/etc/config/easytier $(1)/etc/config/easytier
+        $(INSTALL_DIR) $(1)/etc/init.d
+        $(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
 endef
 
 Package/easytier-lite/install = $(Package/easytier/install)
