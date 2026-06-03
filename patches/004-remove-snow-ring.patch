@@ -1,0 +1,8 @@
+--- a/easytier/Cargo.toml
++++ b/easytier/Cargo.toml
+@@ -181,1 +181,4 @@
+-snow = "0.10.0"
++snow = { version = "0.10.0", default-features = false, features = [
++    "default-resolver",
++    "default-resolver-crypto",
++] }
