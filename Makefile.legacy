@@ -77,12 +77,12 @@ Build/Compile=mkdir -p $(PKG_INSTALL_DIR)/bin && $(CP) $(PREBUILT_DIR)/$(or $(BU
 
 # ============ Install ============
 define Package/easytier/install
-        $(INSTALL_DIR) $(1)/usr/bin
-        $(INSTALL_BIN) $(PKG_INSTALL_DIR)/bin/easytier-core $(1)/usr/bin/
-        $(INSTALL_DIR) $(1)/etc/config
-        $(INSTALL_CONF) ./files/etc/config/easytier $(1)/etc/config/easytier
-        $(INSTALL_DIR) $(1)/etc/init.d
-        $(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
+	$(INSTALL_DIR) $(1)/usr/bin
+	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/bin/easytier-core $(1)/usr/bin/
+	$(INSTALL_DIR) $(1)/etc/config
+	$(INSTALL_CONF) ./files/etc/config/easytier $(1)/etc/config/easytier
+	$(INSTALL_DIR) $(1)/etc/init.d
+	$(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
 endef
 
 Package/easytier-lite/install = $(Package/easytier/install)
