@@ -1,9 +1,10 @@
---- a/easytier/Cargo.toml
-+++ b/easytier/Cargo.toml
-@@ -230,10 +230,6 @@
+--- a/easytier/Cargo.toml	2026-05-12 12:26:16.000000000 +0000
++++ b/easytier/Cargo.toml	2026-06-03 21:13:25.980023658 +0000
+@@ -229,11 +229,6 @@
+     "derive",
  ] }
  
- # for http connector
+-# for http connector
 -http_req = { git = "https://github.com/EasyTier/http_req.git", default-features = false, features = [
 -    "rust-tls",
 -] }
@@ -11,8 +12,8 @@
  # for dns connector
  hickory-resolver = "0.25.2"
  hickory-proto = "0.25.2"
---- a/easytier/src/connector/mod.rs
-+++ b/easytier/src/connector/mod.rs
+--- a/easytier/src/connector/mod.rs	2026-05-12 12:26:16.000000000 +0000
++++ b/easytier/src/connector/mod.rs	2026-06-03 21:14:11.047359294 +0000
 @@ -10,7 +10,6 @@
      },
      utils::BoxExt,
@@ -39,8 +40,58 @@
          TunnelScheme::Ring => RingTunnelConnector::new(url).boxed(),
          TunnelScheme::Txt | TunnelScheme::Srv => {
              if url.host_str().is_none() {
---- a/easytier/src/connector/manual.rs
-+++ b/easytier/src/connector/manual.rs
+--- a/easytier/src/connector/dns_connector.rs	2026-05-12 12:26:16.000000000 +0000
++++ b/easytier/src/connector/dns_connector.rs	2026-06-03 21:14:21.709438749 +0000
+@@ -1,6 +1,6 @@
+-use std::{net::SocketAddr, sync::Arc};
++use std::{net::SocketAddr, pin::Pin, sync::Arc};
+ 
+-use super::{create_connector_by_url, http_connector::TunnelWithInfo};
++use super::create_connector_by_url;
+ use crate::{
+     common::{
+         dns::{RESOLVER, resolve_txt_record},
+@@ -9,7 +9,8 @@
+         log,
+     },
+     proto::common::TunnelInfo,
+-    tunnel::{IpScheme, IpVersion, Tunnel, TunnelConnector, TunnelError, TunnelScheme},
++    tunnel::{IpScheme, IpVersion, Tunnel, TunnelConnector, TunnelError, TunnelScheme,
++        ZCPacketSink, ZCPacketStream},
+ };
+ use anyhow::Context;
+ use dashmap::DashSet;
+@@ -258,3 +259,28 @@
+         }
+     }
+ }
++
++
++/// Wrapper that attaches resolved peer address info to a Tunnel.
++/// Originally defined in http_connector; moved here after http_connector
++/// was removed to eliminate the rustls/ring dependency chain.
++pub(super) struct TunnelWithInfo {
++    inner: Box<dyn Tunnel>,
++    info: TunnelInfo,
++}
++
++impl TunnelWithInfo {
++    pub fn new(inner: Box<dyn Tunnel>, info: TunnelInfo) -> Self {
++        Self { inner, info }
++    }
++}
++
++impl Tunnel for TunnelWithInfo {
++    fn split(&self) -> (Pin<Box<dyn ZCPacketStream>>, Pin<Box<dyn ZCPacketSink>>) {
++        self.inner.split()
++    }
++
++    fn info(&self) -> Option<TunnelInfo> {
++        Some(self.info.clone())
++    }
++}
+--- a/easytier/src/connector/manual.rs	2026-05-12 12:26:16.000000000 +0000
++++ b/easytier/src/connector/manual.rs	2026-06-03 21:14:34.614535016 +0000
 @@ -88,7 +88,7 @@
      fn reconnect_timeout(dead_url: &url::Url) -> Duration {
          let use_long_timeout = matches_scheme!(
@@ -50,8 +101,8 @@
          ) || matches!(dead_url.scheme(), "ws" | "wss");
  
          Duration::from_secs(if use_long_timeout { 20 } else { 2 })
---- a/easytier/src/tunnel/mod.rs
-+++ b/easytier/src/tunnel/mod.rs
+--- a/easytier/src/tunnel/mod.rs	2026-05-12 12:26:16.000000000 +0000
++++ b/easytier/src/tunnel/mod.rs	2026-06-03 21:14:34.625535097 +0000
 @@ -350,8 +350,6 @@
      #[cfg(unix)]
      Unix,
