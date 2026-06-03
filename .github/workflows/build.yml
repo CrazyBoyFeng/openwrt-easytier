@@ -141,8 +141,9 @@ jobs:
 
           # Collect artifacts — only easytier packages from bin/packages/.
           # apk filenames lack architecture info (e.g. easytier-2.6.4-r1.apk),
-          # so rename them with PKGARCH (same arch id used in ipk filenames)
-          # to avoid overwrites when release job merges artifacts.
+          # so rename them with PKGARCH to avoid overwrites when release job
+          # merges artifacts.  Use '-' separator to match apk convention
+          # (apk uses '-', ipk uses '_').
           # PKGARCH is the directory name under bin/packages/ (e.g. x86_64,
           # aarch64_cortex-a53, mipsel_24kc).
           PKGARCH="$(find bin/packages -mindepth 1 -maxdepth 1 -type d | head -1 | xargs basename)"
@@ -152,7 +153,7 @@ jobs:
             base="$(basename "$f")"
             name="${base%.apk}"
             if [ "$base" != "$name" ]; then
-              # apk: insert PKGARCH before .apk (matches ipk convention)
+              # apk: insert PKGARCH before .apk with '-' separator
               cp "$f" "$WORKSPACE/output/$SDK_VER/${name}-${PKGARCH}.apk"
             else
               # ipk already contains arch, keep as-is
