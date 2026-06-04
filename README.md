@@ -27,8 +27,6 @@ Removed from lite: `wireguard`, `socks5`, `smoltcp`, `quic`, `websocket`. Users 
 | `enable_quic_proxy` | No effect | Silently accepted, but QUIC proxy is not compiled |
 | `http://` / `https://` in `peers` | Not available | Binary rejects with parse error (both variants) |
 
-> **Note:** Both variants share the same `init.d` script and config template, so these options appear in `/etc/config/easytier` regardless of which variant is installed.
-
 Both variants install `easytier-core` binary only. No `easytier-cli` is included.
 
 ## Quick Start
