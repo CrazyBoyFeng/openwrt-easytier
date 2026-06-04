@@ -14,7 +14,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=easytier
 PKG_VERSION:=2.6.4
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 
 PKG_MAINTAINER:=CrazyBoyFeng
 PKG_LICENSE:=Apache-2.0
