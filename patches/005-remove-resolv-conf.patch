@@ -5,3 +5,6 @@
 +hickory-resolver = { version = "0.25.2", default-features = false, features = [
 +    "tokio",
 +] }
+@@ -403,1 +403,1 @@
+-magic-dns = ["dep:hickory-client", "dep:hickory-server"]
++magic-dns = ["dep:hickory-client", "dep:hickory-server", "hickory-resolver/!system-config"]

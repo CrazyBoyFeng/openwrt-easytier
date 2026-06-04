@@ -125,6 +125,13 @@ export CARGO_PROFILE_RELEASE_PANIC=abort
 export CARGO_PROFILE_RELEASE_OPT_LEVEL=z
 export CARGO_PROFILE_RELEASE_STRIP=true
 
+# Remap absolute build paths to short relative paths so they don't
+# leak into .rodata (panic messages, file!() macros, type names, etc.).
+# CURDIR = package directory (Makefile, patches, files/)
+# PKG_BUILD_DIR = extracted source directory (Cargo.toml, src/)
+# Approximate savings: ~200-300 KB per binary.
+export RUSTFLAGS := --remap-path-prefix="$(CURDIR)/=" --remap-path-prefix="$(PKG_BUILD_DIR)/="
+
 # easytier is a workspace member, pass subdirectory path to cargo.
 # Only build easytier-core (skip easytier-cli which is not packaged).
 # Each Build/Compile is a single line (no backslash continuation)
