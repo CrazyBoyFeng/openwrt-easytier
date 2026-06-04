@@ -46,10 +46,10 @@ include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk
 # Fix: filter out the conflicting profile keys, then append our preferred
 # values so that CARGO_PKG_VARS and our exports are consistent.
 CARGO_PKG_VARS := $(filter-out \
-	CARGO_PROFILE_RELEASE_LTO=% \
-	CARGO_PROFILE_RELEASE_OPT_LEVEL=% \
-	CARGO_PROFILE_RELEASE_PANIC=%, \
-	$(CARGO_PKG_VARS))
+        CARGO_PROFILE_RELEASE_LTO=% \
+        CARGO_PROFILE_RELEASE_OPT_LEVEL=% \
+        CARGO_PROFILE_RELEASE_PANIC=%, \
+        $(CARGO_PKG_VARS))
 
 CARGO_PKG_VARS += CARGO_PROFILE_RELEASE_LTO=fat
 CARGO_PKG_VARS += CARGO_PROFILE_RELEASE_OPT_LEVEL=z
@@ -132,12 +132,12 @@ export CARGO_PROFILE_RELEASE_STRIP=true
 
 ifeq ($(BUILD_VARIANT),lite)
 # EASYTIER_COMPILE_LITE
-Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core --no-default-features)
+Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core --no-default-features) && $(OBJCOPY) --remove-section=.eh_frame --remove-section=.eh_frame_hdr $(PKG_INSTALL_DIR)/bin/easytier-core
 endif
 
 ifeq ($(BUILD_VARIANT),default)
 # EASYTIER_COMPILE_DEFAULT
-Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core)
+Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core) && $(OBJCOPY) --remove-section=.eh_frame --remove-section=.eh_frame_hdr $(PKG_INSTALL_DIR)/bin/easytier-core
 endif
 
 # Override Build/Prepare to handle case-sensitive directory name
@@ -146,22 +146,22 @@ endif
 # (based on PKG_NAME).  --strip-components=1 flattens the tarball so
 # source files land directly in PKG_BUILD_DIR.
 define Build/Prepare
-	rm -rf $(PKG_BUILD_DIR)
-	mkdir -p $(PKG_BUILD_DIR)
-	gzip -dc $(DL_DIR)/$(PKG_SOURCE) | tar -C $(PKG_BUILD_DIR) --strip-components=1 -xf -
-	$(Build/Patch/Default)
+        rm -rf $(PKG_BUILD_DIR)
+        mkdir -p $(PKG_BUILD_DIR)
+        gzip -dc $(DL_DIR)/$(PKG_SOURCE) | tar -C $(PKG_BUILD_DIR) --strip-components=1 -xf -
+        $(Build/Patch/Default)
 endef
 
 # Define install for easytier (default).  easytier-lite shares the same
 # install via a variable alias (jq-style).  RustBinPackage uses ifndef, so
 # defining install here prevents it from generating a duplicate default rule.
 define Package/easytier/install
-	$(INSTALL_DIR) $(1)/usr/bin
-	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/bin/easytier-core $(1)/usr/bin
-	$(INSTALL_DIR) $(1)/etc/config
-	$(INSTALL_CONF) ./files/etc/config/easytier $(1)/etc/config/easytier
-	$(INSTALL_DIR) $(1)/etc/init.d
-	$(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
+        $(INSTALL_DIR) $(1)/usr/bin
+        $(INSTALL_BIN) $(PKG_INSTALL_DIR)/bin/easytier-core $(1)/usr/bin
+        $(INSTALL_DIR) $(1)/etc/config
+        $(INSTALL_CONF) ./files/etc/config/easytier $(1)/etc/config/easytier
+        $(INSTALL_DIR) $(1)/etc/init.d
+        $(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
 endef
 
 Package/easytier-lite/install = $(Package/easytier/install)
