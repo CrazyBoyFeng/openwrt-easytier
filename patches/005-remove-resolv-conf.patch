@@ -1,0 +1,7 @@
+--- a/easytier/Cargo.toml
++++ b/easytier/Cargo.toml
+@@ -238,1 +238,3 @@
+-hickory-resolver = "0.25.2"
++hickory-resolver = { version = "0.25.2", default-features = false, features = [
++    "tokio",
++] }
