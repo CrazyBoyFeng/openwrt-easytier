@@ -13,8 +13,6 @@ EasyTier is a simple, decentralized and secure mesh VPN with WireGuard support, 
 
 Removed from lite: `wireguard`, `socks5`, `smoltcp`, `quic`, `websocket`. Users can install standalone OS packages (`wireguard-tools`, `microsocks`) if needed.
 
-HTTP/HTTPS peer discovery (added in upstream v2.2.3) is removed from both variants via patch to eliminate the `rustls`+`ring` TLS dependency from `http_req`. Both variants share the same `ring` copy via `snow` (Noise protocol for `--secure-mode`).
-
 **Lite variant limitations on UCI options:**
 
 | Option | Impact in lite | Behavior |
