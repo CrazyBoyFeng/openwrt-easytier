@@ -132,6 +132,10 @@ export CARGO_PROFILE_RELEASE_STRIP=true
 # Approximate savings: ~200-300 KB per binary.
 export RUSTFLAGS := --remap-path-prefix="$(CURDIR)/=" --remap-path-prefix="$(PKG_BUILD_DIR)/="
 
+# OBJCOPY is not set by rust-package.mk's Build/Compile/Cargo context.
+# Host objcopy can remove .eh_frame sections from any ELF binary.
+OBJCOPY ?= objcopy
+
 # easytier is a workspace member, pass subdirectory path to cargo.
 # Only build easytier-core (skip easytier-cli which is not packaged).
 # Each Build/Compile is a single line (no backslash continuation)
