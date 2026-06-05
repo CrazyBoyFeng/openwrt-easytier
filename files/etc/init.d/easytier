@@ -256,9 +256,6 @@ stop_instance() {
 }
 
 start() {
-        # Enable IP forwarding (required for VPN routing)
-        sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1
-
         config_load "easytier"
         config_foreach start_instance "easytier"
 }
@@ -289,6 +286,8 @@ setup_network() {
 
         config_get proxy_forward_by_system "$cfg" proxy_forward_by_system "0"
         config_get enable_exit_node "$cfg" enable_exit_node "0"
+
+        [ "$proxy_forward_by_system" = "1" ] && sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1
 
         # Wait for TUN device to appear (up to 10 seconds)
         local i=0

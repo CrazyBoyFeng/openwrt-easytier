@@ -281,13 +281,12 @@ Not effective when `config_server` or `config_dir` is set.
 
 The procd init script automatically handles:
 
-1. **IP forwarding** - Enable `net.ipv4.ip_forward` on start
-2. **Process management** - Start/stop/restart `easytier-core` via procd, auto-respawn
-3. **TUN device** - Wait for TUN device, bring it up
-4. **Firewall** - Create zone with `mtu_fix` and bidirectional forwarding; `masq` when `proxy_forward_by_system=1`
-5. **DNS (Magic DNS)** - Add dnsmasq forwarding rule for `tld_dns_zone`
-6. **Cleanup** - Remove firewall rules and dnsmasq config on stop
-7. **Hot reload** - UCI changes trigger automatic restart via `procd_add_reload_trigger`
+1. **Process management** - Start/stop/restart `easytier-core` via procd, auto-respawn
+2. **TUN device** - Wait for TUN device, bring it up
+3. **Firewall** - Create zone with `mtu_fix` and bidirectional forwarding; `masq` when `proxy_forward_by_system=1`; enable `net.ipv4.ip_forward` when `proxy_forward_by_system=1`
+4. **DNS (Magic DNS)** - Add dnsmasq forwarding rule for `tld_dns_zone`
+5. **Cleanup** - Remove firewall rules and dnsmasq config on stop
+6. **Hot reload** - UCI changes trigger automatic restart via `procd_add_reload_trigger`
 
 ## Multi-Instance Example
 
