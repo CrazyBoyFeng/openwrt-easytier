@@ -133,8 +133,9 @@ export CARGO_PROFILE_RELEASE_STRIP=true
 export RUSTFLAGS := --remap-path-prefix="$(CURDIR)/=" --remap-path-prefix="$(PKG_BUILD_DIR)/="
 
 # OBJCOPY is not set by rust-package.mk's Build/Compile/Cargo context.
-# Host objcopy can remove .eh_frame sections from any ELF binary.
-OBJCOPY ?= objcopy
+# Must use the target toolchain objcopy to handle cross-arch ELF binaries
+# (e.g. aarch64 binary cannot be processed by x86_64 host objcopy).
+OBJCOPY ?= $(TARGET_CROSS)objcopy
 
 # easytier is a workspace member, pass subdirectory path to cargo.
 # Only build easytier-core (skip easytier-cli which is not packaged).
