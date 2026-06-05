@@ -186,7 +186,7 @@ Options are following the [official documentation](https://easytier.cn/guide/net
 | `hostname` | string | (system) | `--hostname` | Device hostname for Magic DNS |
 | `instance_name` | string | (section) | `--instance-name` | Instance name |
 | `peers` | list | - | `--peers` | Peer node addresses. Transport: same as listeners + `ring://` (same-process only); Discovery: `txt://`, `srv://` (all variants); `http://`, `https://` (default only) |
-| `external_node` | list | - | `--external-node` | Public shared node addresses |
+| `external_node` | list | - | `--external-node` | Public shared node address (each entry passed as a single `--external-node`; functionally equivalent to `peers`) |
 | `proxy_networks` | list | - | `--proxy-networks` | Export local subnets (supports mapping: `10.0.0.0/24->192.168.0.0/24`) |
 
 ### RPC Settings
@@ -213,7 +213,7 @@ Options are following the [official documentation](https://easytier.cn/guide/net
 | `disable_encryption` | bool | `0` | `--disable-encryption` | Disable encryption |
 | `encryption_algorithm` | string | (aes-gcm) | `--encryption-algorithm` | `xor`, `chacha20` (**not in lite**), `aes-gcm`, `aes-256-gcm` |
 | `multi_thread` | bool | `0` | `--multi-thread` | Enable multi-threaded runtime |
-| `multi_thread_count` | uint | (2) | `--multi-thread-count` | Thread count (must be > 2, only with multi-thread) |
+| `multi_thread_count` | uint | - | `--multi-thread-count` | Thread count (must be > 2, only with multi-thread; default 2) |
 | `disable_ipv6` | bool | `0` | `--disable-ipv6` | Disable IPv6 |
 | `dev_name` | string | `et_{section}` | `--dev-name` | TUN device name |
 | `mtu` | uint | (auto) | `--mtu` | TUN device MTU |
@@ -235,7 +235,7 @@ Options are following the [official documentation](https://easytier.cn/guide/net
 | `disable_upnp` | bool | `0` | `--disable-upnp` | Disable UPnP/NAT-PMP automatic port mapping |
 | `enable_udp_broadcast_relay` | bool | `0` | `--enable-udp-broadcast-relay` | Enable UDP broadcast relay (Windows only) |
 | `relay_all_peer_rpc` | bool | `0` | `--relay-all-peer-rpc` | Relay all peer RPC packets |
-| `socks5` | string | (empty) | `--socks5` | SOCKS5 proxy port, e.g. `1080` (**not available in lite**) |
+| `socks5` | uint | (empty) | `--socks5` | SOCKS5 proxy port number, e.g. `1080` (**not available in lite**) |
 | `compression` | string | (none) | `--compression` | `none` or `zstd` |
 | `bind_device` | string | (empty) | `--bind-device` | Bind connector sockets to physical device |
 | `enable_kcp_proxy` | bool | `0` | `--enable-kcp-proxy` | Use KCP proxy for TCP streams |
@@ -248,14 +248,14 @@ Options are following the [official documentation](https://easytier.cn/guide/net
 | `private_mode` | bool | `0` | `--private-mode` | Only relay same-network traffic |
 | `foreign_relay_bps_limit` | string | (empty) | `--foreign-relay-bps-limit` | Limit foreign network relay bandwidth (BPS) |
 | `instance_recv_bps_limit` | string | (empty) | `--instance-recv-bps-limit` | Limit instance receive bandwidth (BPS) |
-| `tcp_whitelist` | string | (empty) | `--tcp-whitelist` | TCP port whitelist (supports ranges: `80`, `8000-9000`) |
-| `udp_whitelist` | string | (empty) | `--udp-whitelist` | UDP port whitelist (supports ranges) |
+| `tcp_whitelist` | string | (empty) | `--tcp-whitelist` | TCP port whitelist, comma-separated (supports ranges: `80`, `8000-9000`) |
+| `udp_whitelist` | string | (empty) | `--udp-whitelist` | UDP port whitelist, comma-separated (supports ranges: `53`, `5000-6000`) |
 | `disable_relay_kcp` | bool | `0` | `--disable-relay-kcp` | Disallow forwarding KCP packets |
 | `enable_relay_foreign_network_kcp` | bool | `0` | `--enable-relay-foreign-network-kcp` | Allow relaying foreign network KCP |
 | `disable_relay_quic` | bool | `0` | `--disable-relay-quic` | Disallow forwarding QUIC packets (**no effect in lite**) |
 | `enable_relay_foreign_network_quic` | bool | `0` | `--enable-relay-foreign-network-quic` | Allow relaying foreign network QUIC (**no effect in lite**) |
-| `stun_servers` | list | - | `--stun-servers` | Override default STUN server list |
-| `stun_servers_v6` | list | - | `--stun-servers-v6` | Override default IPv6 STUN server list |
+| `stun_servers` | list | - | `--stun-servers` | Override default STUN server list (empty list disables STUN) |
+| `stun_servers_v6` | list | - | `--stun-servers-v6` | Override default IPv6 STUN server list (empty list disables STUN) |
 
 ### Logging Settings
 
