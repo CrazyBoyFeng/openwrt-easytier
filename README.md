@@ -185,7 +185,7 @@ Options are following the [official documentation](https://easytier.cn/guide/net
 | `dhcp` | bool | `0` | `--dhcp` | Auto-assign IP via DHCP |
 | `hostname` | string | (system) | `--hostname` | Device hostname for Magic DNS |
 | `instance_name` | string | (section) | `--instance-name` | Instance name |
-| `peers` | list | - | `--peers` | Peer node addresses. Transport: same as listeners; Discovery: `txt://`, `srv://` (all variants); `http://`, `https://` (default only) |
+| `peers` | list | - | `--peers` | Peer node addresses. Transport: same as listeners + `ring://` (same-process only); Discovery: `txt://`, `srv://` (all variants); `http://`, `https://` (default only) |
 | `external_node` | list | - | `--external-node` | Public shared node addresses |
 | `proxy_networks` | list | - | `--proxy-networks` | Export local subnets (supports mapping: `10.0.0.0/24->192.168.0.0/24`) |
 
