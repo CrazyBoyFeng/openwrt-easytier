@@ -13,21 +13,6 @@ EasyTier is a simple, decentralized and secure mesh VPN with WireGuard support, 
 
 Removed from lite: `wireguard`, `socks5`, `smoltcp`, `quic`, `websocket`. Users can install standalone OS packages (`wireguard-tools`, `microsocks`) if needed.
 
-**Lite variant limitations on UCI options:**
-
-| Option | Impact in lite | Behavior |
-|--------|---------------|----------|
-| `socks5` | Not available | Binary rejects with error on startup |
-| `vpn_portal` | No effect | Silently accepted, but WireGuard portal is not started |
-| `use_smoltcp` | No effect | Silently accepted, but user-space TCP stack is not compiled |
-| `encryption_algorithm = chacha20` | Not available | Requires `wireguard` feature; binary rejects with parse error |
-| `encryption_algorithm = openssl-*` | Not available in either variant | Requires `openssl-crypto` feature; binary rejects with parse error |
-| `wg://` in `peers`/`listeners` | Not available | Binary rejects with parse error |
-| `quic://` in `peers`/`listeners` | Not available | Binary rejects with parse error |
-| `ws://` / `wss://` in `peers`/`listeners` | Not available | Binary rejects with parse error |
-| `enable_quic_proxy` | No effect | Silently accepted, but QUIC proxy is not compiled |
-| `http://` / `https://` in `peers` | Not available in lite | Default variant supports HTTP peer discovery; lite rejects with parse error |
-
 Both variants install `easytier-core` binary only. No `easytier-cli` is included.
 
 ## Quick Start
