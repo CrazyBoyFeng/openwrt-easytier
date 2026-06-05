@@ -1,0 +1,38 @@
+#!/bin/bash
+# pre-commit: reject 8-space indentation in files that require tabs.
+#
+# Affected files (Make requires tabs; OpenWrt init.d convention uses tabs):
+#   Makefile, Makefile.*, build.sh, files/etc/init.d/*
+
+set -euo pipefail
+
+FILES=$(git diff --cached --name-only --diff-filter=ACM \
+  -- 'Makefile' 'Makefile.*' 'build.sh' 'files/etc/init.d/*' '*.mk')
+
+if [[ -z "$FILES" ]]; then
+  exit 0
+fi
+
+STATUS=0
+for f in $FILES; do
+  # Detect lines with leading 8 spaces (two-level indent) but no tab.
+  VIOLATIONS=$(git show ":$f" 2>/dev/null \
+    | grep -nP '^ {8}' \
+    | grep -vP '^\d+:\t' || true)
+  if [[ -n "$VIOLATIONS" ]]; then
+    echo "ERROR: $f contains 8-space indentation (should use TAB):" >&2
+    echo "$VIOLATIONS" | head -5 >&2
+    COUNT=$(echo "$VIOLATIONS" | wc -l)
+    if (( COUNT > 5 )); then
+      echo "  ... and $((COUNT - 5)) more" >&2
+    fi
+    STATUS=1
+  fi
+done
+
+if (( STATUS )); then
+  echo "" >&2
+  echo "Hint: sed -i 's/^        /\t/' <file>" >&2
+fi
+
+exit $STATUS

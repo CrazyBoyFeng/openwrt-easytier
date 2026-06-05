@@ -36,6 +36,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check tab indentation
+        run: |
+          FAIL=0
+          for f in Makefile Makefile.legacy build.sh files/etc/init.d/easytier; do
+            if [ -f "$f" ]; then
+              BAD=$(grep -nP '^ {8}' "$f" | grep -vP '^\d+:\t' || true)
+              if [ -n "$BAD" ]; then
+                echo "::error file=$f::8-space indentation detected (should use TAB):"
+                echo "$BAD" | head -5
+                FAIL=1
+              fi
+            fi
+          done
+          exit $FAIL
+
       - name: Check build cache
         id: cache
         uses: actions/cache@v4
