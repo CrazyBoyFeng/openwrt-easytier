@@ -34,7 +34,7 @@ validate_easytier_section() {
                 'ipv6_public_addr_prefix:string' \
                 'dhcp:bool:0' \
                 'peers:list(string)' \
-                'external_node:list(string)' \
+                'external_node:string' \
                 'proxy_networks:list(string)' \
                 'rpc_portal:string' \
                 'rpc_portal_whitelist:string' \
@@ -135,9 +135,7 @@ start_instance() {
         for p in $peers; do
                 procd_append_param command --peers "$p"
         done
-        for e in $external_node; do
-                procd_append_param command --external-node "$e"
-        done
+        [ -n "$external_node" ] && procd_append_param command --external-node "$external_node"
         for n in $proxy_networks; do
                 procd_append_param command --proxy-networks "$n"
         done

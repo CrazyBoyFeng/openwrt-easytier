@@ -40,7 +40,7 @@ config easytier 'easytier'
         # option hostname ''
         # option instance_name ''
         # list peers 'tcp://1.2.3.4:11010'
-        # list external_node 'tcp://public.example.com:11010'
+        # option external_node 'tcp://public.example.com:11010'
         # list proxy_networks '192.168.1.0/24'
 
         # ===== RPC 设置 (RPC Settings) =====
