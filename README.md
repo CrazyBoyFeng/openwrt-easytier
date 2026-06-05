@@ -25,7 +25,7 @@ Removed from lite: `wireguard`, `socks5`, `smoltcp`, `quic`, `websocket`. Users 
 | `quic://` in `peers`/`listeners` | Not available | Binary rejects with parse error |
 | `ws://` / `wss://` in `peers`/`listeners` | Not available | Binary rejects with parse error |
 | `enable_quic_proxy` | No effect | Silently accepted, but QUIC proxy is not compiled |
-| `http://` / `https://` in `peers` | Not available | Binary rejects with parse error (both variants) |
+| `http://` / `https://` in `peers` | Not available in lite | Default variant supports HTTP peer discovery; lite rejects with parse error |
 
 Both variants install `easytier-core` binary only. No `easytier-cli` is included.
 
@@ -185,7 +185,7 @@ Options are following the [official documentation](https://easytier.cn/guide/net
 | `dhcp` | bool | `0` | `--dhcp` | Auto-assign IP via DHCP |
 | `hostname` | string | (system) | `--hostname` | Device hostname for Magic DNS |
 | `instance_name` | string | (section) | `--instance-name` | Instance name |
-| `peers` | list | - | `--peers` | Initial peer node addresses |
+| `peers` | list | - | `--peers` | Peer node addresses. Transport: same as listeners; Discovery: `txt://`, `srv://` (all variants); `http://`, `https://` (default only) |
 | `external_node` | list | - | `--external-node` | Public shared node addresses |
 | `proxy_networks` | list | - | `--proxy-networks` | Export local subnets (supports mapping: `10.0.0.0/24->192.168.0.0/24`) |
 
@@ -200,7 +200,7 @@ Options are following the [official documentation](https://easytier.cn/guide/net
 
 | Option | Type | Default | CLI Equivalent | Description |
 |--------|------|---------|---------------|-------------|
-| `listeners` | list | (defaults) | `--listeners` | Listener URLs (tcp, udp, faketcp); `wg://`, `quic://`, `ws://`, `wss://` not available in lite |
+| `listeners` | list | (defaults) | `--listeners` | Listener URLs. Transport protocols: `tcp://`, `udp://`, `faketcp://` (all variants); `wg://`, `quic://`, `ws://`, `wss://` (default only); `unix://` (Unix only) |
 | `mapped_listeners` | list | - | `--mapped-listeners` | Public address mapping for NAT traversal |
 | `no_listener` | bool | `0` | `--no-listener` | Don't listen on any port |
 | `default_protocol` | string | (auto) | `--default-protocol` | Default protocol for peer connections |
