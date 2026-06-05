@@ -201,8 +201,8 @@ Options are following the [official documentation](https://easytier.cn/guide/net
 
 | Option | Default | CLI Equivalent | Description |
 |--------|---------|---------------|-------------|
-| `listeners` | (auto) | `--listeners` | Listener URLs. Transport protocols: `tcp://`, `udp://`, `faketcp://` (all variants); `wg://`, `quic://`, `ws://`, `wss://` (default only); `unix://` (Unix only) |
-| `mapped_listeners` | - | `--mapped-listeners` | Public address mapping for NAT traversal |
+| `listeners` | (auto) | `--listeners` | Accept connections. Three formats: plain port `<11010>` (tcp/udp on 11010, ws/wss on 11010+11011, wg on 11011); URL `<protocol://0.0.0.0:11010>` (protocol: `tcp`, `udp`, `ring`, `wg`, `ws`, `wss`, `quic`, `faketcp`); shorthand `<proto:port>` (e.g. `wg:11011`). Variant availability: `tcp`, `udp`, `faketcp` (all); `wg`, `quic`, `ws`, `wss` (default only) |
+| `mapped_listeners` | - | `--mapped-listeners` | Public address for NAT traversal, e.g. `tcp://1.2.3.4:11010` |
 | `no_listener` | `0` | `--no-listener` | Don't listen on any port |
 | `default_protocol` | (auto) | `--default-protocol` | Default protocol for peer connections |
 
