@@ -211,12 +211,12 @@ Options are following the [official documentation](https://easytier.cn/guide/net
 |--------|------|---------|---------------|-------------|
 | `vpn_portal` | string | (empty) | `--vpn-portal` | VPN portal URL, e.g. `wg://0.0.0.0:11010/10.14.14.0/24` (**no effect in lite**) |
 | `disable_encryption` | bool | `0` | `--disable-encryption` | Disable encryption |
-| `encryption_algorithm` | string | (aes-gcm) | `--encryption-algorithm` | `xor`, `chacha20` (**not in lite**), `aes-gcm`, `aes-256-gcm` |
+| `encryption_algorithm` | string | `aes-gcm` | `--encryption-algorithm` | `xor`, `chacha20` (**not in lite**), `aes-gcm`, `aes-gcm-256`, `openssl-aes128-gcm`, `openssl-aes256-gcm`, `openssl-chacha20` (**openssl-* not available in both variants**) |
 | `multi_thread` | bool | `0` | `--multi-thread` | Enable multi-threaded runtime |
-| `multi_thread_count` | uint | - | `--multi-thread-count` | Thread count (must be > 2, only with multi-thread; default 2) |
+| `multi_thread_count` | uint | `2` | `--multi-thread-count` | Thread count (must be > 2, only with multi-thread) |
 | `disable_ipv6` | bool | `0` | `--disable-ipv6` | Disable IPv6 |
 | `dev_name` | string | `et_{section}` | `--dev-name` | TUN device name |
-| `mtu` | uint | (auto) | `--mtu` | TUN device MTU |
+| `mtu` | uint | `1380/1360` | `--mtu` | TUN device MTU (1380 for non-encryption, 1360 for encryption) |
 | `latency_first` | bool | `0` | `--latency-first` | Use lowest-latency path |
 | `exit_nodes` | list | - | `--exit-nodes` | Exit node IPv4 addresses (traffic forwarding) |
 | `enable_exit_node` | bool | `0` | `--enable-exit-node` | Allow this node to be an exit node |
@@ -236,7 +236,7 @@ Options are following the [official documentation](https://easytier.cn/guide/net
 | `enable_udp_broadcast_relay` | bool | `0` | `--enable-udp-broadcast-relay` | Enable UDP broadcast relay (Windows only) |
 | `relay_all_peer_rpc` | bool | `0` | `--relay-all-peer-rpc` | Relay all peer RPC packets |
 | `socks5` | uint | (empty) | `--socks5` | SOCKS5 proxy port number, e.g. `1080` (**not available in lite**) |
-| `compression` | string | (none) | `--compression` | `none` or `zstd` |
+| `compression` | string | `none` | `--compression` | `none` or `zstd` |
 | `bind_device` | string | (empty) | `--bind-device` | Bind connector sockets to physical device |
 | `enable_kcp_proxy` | bool | `0` | `--enable-kcp-proxy` | Use KCP proxy for TCP streams |
 | `disable_kcp_input` | bool | `0` | `--disable-kcp-input` | Disallow KCP proxy input from other nodes |
