@@ -115,6 +115,6 @@ config easytier 'easytier'
 
         # ===== OpenWrt 集成 (OpenWrt Integration) =====
 
-        option auto_firewall '1'
+        option auto_firewall '0'
         option firewall_zone 'lan'
-        option auto_dnsmasq '1'
+        option auto_dnsmasq '0'

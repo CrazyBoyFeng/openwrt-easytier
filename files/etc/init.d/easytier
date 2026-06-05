@@ -96,9 +96,9 @@ validate_easytier_section() {
                 'file_log_dir:string' \
                 'file_log_size:string' \
                 'file_log_count:string' \
-                'auto_firewall:string:1' \
+                'auto_firewall:string:0' \
                 'firewall_zone:string:lan' \
-                'auto_dnsmasq:string:1'
+                'auto_dnsmasq:string:0'
 }
 
 start_instance() {

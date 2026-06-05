@@ -273,9 +273,9 @@ Not effective when `config_server` or `config_dir` is set.
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `auto_firewall` | `1` | Create firewall zone with `mtu_fix` and bidirectional forwarding |
+| `auto_firewall` | `0` | Create firewall zone with `mtu_fix` and bidirectional forwarding |
 | `firewall_zone` | `lan` | Firewall zone to forward traffic to/from |
-| `auto_dnsmasq` | `1` | Forward `tld_dns_zone` queries to `100.100.100.101` via dnsmasq |
+| `auto_dnsmasq` | `0` | Forward `tld_dns_zone` queries to `100.100.100.101` via dnsmasq |
 
 ## What the init.d Script Does
 
