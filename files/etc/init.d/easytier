@@ -14,25 +14,25 @@ MAGIC_DNS_IP="100.100.100.101"
 
 validate_easytier_section() {
         uci_load_validate "easytier" "$1" "$2" "$3" \
-                'enabled:bool:1' \
+                'enabled:string:1' \
                 'config_server:string' \
                 'machine_id:string' \
                 'config_file:string' \
                 'config_dir:string' \
-                'disable_env_parsing:bool:0' \
+                'disable_env_parsing:string:0' \
                 'network_name:string:easytier' \
                 'network_secret:string' \
-                'secure_mode:bool:0' \
+                'secure_mode:string:0' \
                 'local_private_key:string' \
                 'local_public_key:string' \
                 'credential:string' \
                 'credential_file:string' \
                 'ipv4:string' \
                 'ipv6:string' \
-                'ipv6_public_addr_provider:bool:0' \
-                'ipv6_public_addr_auto:bool:0' \
+                'ipv6_public_addr_provider:string:0' \
+                'ipv6_public_addr_auto:string:0' \
                 'ipv6_public_addr_prefix:string' \
-                'dhcp:bool:0' \
+                'dhcp:string:0' \
                 'peers:list(string)' \
                 'external_node:string' \
                 'proxy_networks:list(string)' \
@@ -40,65 +40,65 @@ validate_easytier_section() {
                 'rpc_portal_whitelist:string' \
                 'listeners:list(string)' \
                 'mapped_listeners:list(string)' \
-                'no_listener:bool:0' \
+                'no_listener:string:0' \
                 'hostname:string' \
                 'instance_name:string' \
                 'vpn_portal:string' \
                 'default_protocol:string' \
-                'disable_encryption:bool:0' \
+                'disable_encryption:string:0' \
                 'encryption_algorithm:string' \
-                'multi_thread:bool:0' \
-                'multi_thread_count:uinteger' \
-                'disable_ipv6:bool:0' \
+                'multi_thread:string:0' \
+                'multi_thread_count:string' \
+                'disable_ipv6:string:0' \
                 'dev_name:string' \
-                'mtu:uinteger' \
-                'latency_first:bool:0' \
+                'mtu:string' \
+                'latency_first:string:0' \
                 'exit_nodes:list(string)' \
-                'enable_exit_node:bool:0' \
-                'proxy_forward_by_system:bool:0' \
-                'no_tun:bool:0' \
-                'use_smoltcp:bool:0' \
+                'enable_exit_node:string:0' \
+                'proxy_forward_by_system:string:0' \
+                'no_tun:string:0' \
+                'use_smoltcp:string:0' \
                 'manual_routes:list(string)' \
                 'relay_network_whitelist:string' \
-                'p2p_only:bool:0' \
-                'lazy_p2p:bool:0' \
-                'disable_p2p:bool:0' \
-                'need_p2p:bool:0' \
-                'disable_tcp_hole_punching:bool:0' \
-                'disable_udp_hole_punching:bool:0' \
-                'disable_sym_hole_punching:bool:0' \
-                'disable_upnp:bool:0' \
-                'enable_udp_broadcast_relay:bool:0' \
-                'relay_all_peer_rpc:bool:0' \
+                'p2p_only:string:0' \
+                'lazy_p2p:string:0' \
+                'disable_p2p:string:0' \
+                'need_p2p:string:0' \
+                'disable_tcp_hole_punching:string:0' \
+                'disable_udp_hole_punching:string:0' \
+                'disable_sym_hole_punching:string:0' \
+                'disable_upnp:string:0' \
+                'enable_udp_broadcast_relay:string:0' \
+                'relay_all_peer_rpc:string:0' \
                 'socks5:string' \
                 'compression:string' \
                 'bind_device:string' \
-                'enable_kcp_proxy:bool:0' \
-                'disable_kcp_input:bool:0' \
-                'enable_quic_proxy:bool:0' \
-                'disable_quic_input:bool:0' \
+                'enable_kcp_proxy:string:0' \
+                'disable_kcp_input:string:0' \
+                'enable_quic_proxy:string:0' \
+                'disable_quic_input:string:0' \
                 'port_forward:list(string)' \
-                'accept_dns:bool:0' \
+                'accept_dns:string:0' \
                 'tld_dns_zone:string:et.net' \
-                'private_mode:bool:0' \
+                'private_mode:string:0' \
                 'foreign_relay_bps_limit:string' \
                 'instance_recv_bps_limit:string' \
                 'tcp_whitelist:string' \
                 'udp_whitelist:string' \
-                'disable_relay_kcp:bool:0' \
-                'enable_relay_foreign_network_kcp:bool:0' \
-                'disable_relay_quic:bool:0' \
-                'enable_relay_foreign_network_quic:bool:0' \
+                'disable_relay_kcp:string:0' \
+                'enable_relay_foreign_network_kcp:string:0' \
+                'disable_relay_quic:string:0' \
+                'enable_relay_foreign_network_quic:string:0' \
                 'stun_servers:list(string)' \
                 'stun_servers_v6:list(string)' \
                 'console_log_level:string:info' \
                 'file_log_level:string' \
                 'file_log_dir:string' \
-                'file_log_size:uinteger' \
-                'file_log_count:uinteger' \
-                'auto_firewall:bool:1' \
+                'file_log_size:string' \
+                'file_log_count:string' \
+                'auto_firewall:string:1' \
                 'firewall_zone:string:lan' \
-                'auto_dnsmasq:bool:1'
+                'auto_dnsmasq:string:1'
 }
 
 start_instance() {
