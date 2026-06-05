@@ -1,13 +1,13 @@
 #!/bin/bash
 # pre-commit: reject 8-space indentation in files that require tabs.
 #
-# Affected files (Make requires tabs; OpenWrt init.d convention uses tabs):
-#   Makefile, Makefile.*, build.sh, files/etc/init.d/*
+# Affected files (Make requires tabs for recipe lines):
+#   Makefile, Makefile.*
 
 set -euo pipefail
 
 FILES=$(git diff --cached --name-only --diff-filter=ACM \
-  -- 'Makefile' 'Makefile.*' 'build.sh' 'files/etc/init.d/*' '*.mk')
+  -- 'Makefile' 'Makefile.*' '*.mk')
 
 if [[ -z "$FILES" ]]; then
   exit 0

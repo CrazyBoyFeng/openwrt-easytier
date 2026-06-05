@@ -39,7 +39,7 @@ jobs:
       - name: Check tab indentation
         run: |
           FAIL=0
-          for f in Makefile Makefile.legacy build.sh files/etc/init.d/easytier; do
+          for f in Makefile Makefile.legacy; do
             if [ -f "$f" ]; then
               BAD=$(grep -nP '^ {8}' "$f" | grep -vP '^\d+:\t' || true)
               if [ -n "$BAD" ]; then
