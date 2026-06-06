@@ -11,7 +11,7 @@ on:
 
 jobs:
   bloat:
-    name: x86-64
+    name: bloat
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
