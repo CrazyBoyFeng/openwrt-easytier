@@ -128,10 +128,10 @@ export PROTOC="${PROTOC:-$(which protoc 2>/dev/null || echo /usr/bin/protoc)}"
 # Remap paths to keep output deterministic
 export RUSTFLAGS="--remap-path-prefix=$(pwd)/="
 
-# Build from workspace root so target/ is at $SRC_DIR/target/
-# --path easytier selects the member crate (matches Makefile approach).
+# Build from workspace root so target/ is at $SRC_DIR/target/.
+# --package easytier selects the workspace member crate.
 cargo build --release \
-  --path easytier \
+  --package easytier \
   --bin easytier-core \
   --no-default-features \
   --features "$LITE_FEATURES" \
@@ -154,7 +154,7 @@ mkdir -p "$OUTPUT_DIR"
 
 echo "  Running cargo bloat..."
 cargo bloat --release \
-  --path easytier \
+  --package easytier \
   --bin easytier-core \
   --crates \
   > "${OUTPUT_DIR}/bloat-report.txt" 2>&1 \
