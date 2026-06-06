@@ -81,7 +81,7 @@ else
   rm -rf "$SRC_DIR"
   mkdir -p "$SRC_DIR"
   echo "  Downloading ${SOURCE_URL}..."
-  curl -sL "$SOURCE_URL" | tar -C "$SRC_DIR" --strip-components=1 -xf -
+  curl -sL "$SOURCE_URL" | tar -C "$SRC_DIR" --strip-components=1 -xzf -
   echo "  Source extracted"
 fi
 
