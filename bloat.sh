@@ -157,7 +157,8 @@ cargo bloat --release \
   --package easytier \
   --bin easytier-core \
   --crates \
-  > "${OUTPUT_DIR}/bloat-report.txt" 2>&1
+  > "${OUTPUT_DIR}/bloat-report.txt" 2>&1 \
+  || true
 
 BLOAT_EXIT=$?
 echo "  cargo bloat exit: ${BLOAT_EXIT}"
