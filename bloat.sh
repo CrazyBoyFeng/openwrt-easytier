@@ -40,6 +40,9 @@ if [[ -z "$LITE_FEATURES" ]]; then
 fi
 
 SOURCE_URL="https://codeload.github.com/EasyTier/EasyTier/tar.gz/v${VERSION}"
+HOST_TARGET="$(rustc -vV 2>/dev/null | sed -n 's/^host: //p')"
+: "${HOST_TARGET:=x86_64-unknown-linux-gnu}"
+HOST_ARCH="${HOST_TARGET%%-*}"
 SRC_DIR="${WORKSPACE}/.bloat-src"
 OUTPUT_DIR="${WORKSPACE}/.bloat-output"
 
@@ -106,6 +109,7 @@ cd "$SRC_DIR/easytier"
 
 # ===================== Build =====================
 banner "Building easytier-core (lite) for bloat analysis"
+echo "  Target:  ${HOST_TARGET}"
 echo "  Features: ${LITE_FEATURES}"
 echo "  LTO: off"
 echo "  Strip: false"
