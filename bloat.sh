@@ -40,8 +40,6 @@ if [[ -z "$LITE_FEATURES" ]]; then
 fi
 
 SOURCE_URL="https://codeload.github.com/EasyTier/EasyTier/tar.gz/v${VERSION}"
-RUST_TARGET="x86_64-unknown-linux-gnu"
-
 SRC_DIR="${WORKSPACE}/.bloat-src"
 OUTPUT_DIR="${WORKSPACE}/.bloat-output"
 
@@ -108,7 +106,6 @@ cd "$SRC_DIR/easytier"
 
 # ===================== Build =====================
 banner "Building easytier-core (lite) for bloat analysis"
-echo "  Target:  ${RUST_TARGET}"
 echo "  Features: ${LITE_FEATURES}"
 echo "  LTO: off"
 echo "  Strip: false"
@@ -128,12 +125,12 @@ export PROTOC="${PROTOC:-$(which protoc 2>/dev/null || echo /usr/bin/protoc)}"
 # Remap paths to keep output deterministic
 export RUSTFLAGS="--remap-path-prefix=$(pwd)/="
 
-cargo build --release --target "$RUST_TARGET" \
+cargo build --release \
   --bin easytier-core \
   --no-default-features \
   --features "$LITE_FEATURES"
 
-BINARY="target/${RUST_TARGET}/release/easytier-core"
+BINARY="target/release/easytier-core"
 echo ""
 echo "  Binary: $(ls -lh "$BINARY" | awk '{print $5, $NF}')"
 
@@ -142,7 +139,7 @@ banner "Running cargo-bloat"
 
 mkdir -p "$OUTPUT_DIR"
 
-cargo bloat --release --target "$RUST_TARGET" \
+cargo bloat --release \
   --bin easytier-core \
   --crates \
   --target-dir target \
