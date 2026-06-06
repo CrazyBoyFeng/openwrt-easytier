@@ -103,11 +103,11 @@ fi
 
 cd "$SRC_DIR/easytier"
 
-# Patches may remove dependencies from Cargo.toml.  Update the lockfile
-# so --locked can validate against the patched manifest.
+# Patches may remove dependencies from Cargo.toml.  Remove the stale
+# lockfile so cargo can resolve deps from the patched manifest.
 if [[ -d "$PATCHES_DIR" ]]; then
-  echo "  Updating Cargo.lock after patching..."
-  cargo update --workspace 2>/dev/null || true
+  echo "  Removing stale Cargo.lock after patching..."
+  rm -f "${SRC_DIR}/Cargo.lock"
 fi
 
 # ===================== Build =====================
@@ -132,8 +132,7 @@ export RUSTFLAGS="--remap-path-prefix=$(pwd)/="
 cargo build --release --target "$RUST_TARGET" \
   --bin easytier-core \
   --no-default-features \
-  --features "$LITE_FEATURES" \
-  --locked
+  --features "$LITE_FEATURES"
 
 BINARY="target/${RUST_TARGET}/release/easytier-core"
 echo ""
