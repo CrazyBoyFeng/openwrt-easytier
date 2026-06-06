@@ -40,7 +40,7 @@ if [[ -z "$LITE_FEATURES" ]]; then
 fi
 
 SOURCE_URL="https://codeload.github.com/EasyTier/EasyTier/tar.gz/v${VERSION}"
-RUST_TARGET="x86_64-unknown-linux-musl"
+RUST_TARGET="x86_64-unknown-linux-gnu"
 
 SRC_DIR="${WORKSPACE}/.bloat-src"
 OUTPUT_DIR="${WORKSPACE}/.bloat-output"
@@ -65,8 +65,6 @@ if ! command -v rustup &>/dev/null; then
   exit 1
 fi
 rustup default stable
-rustup target add "$RUST_TARGET"
-rustup component add rust-src
 
 echo "  Rust: $(rustc --version)"
 echo "  Cargo: $(cargo --version)"
