@@ -100,7 +100,7 @@ if [[ -d "$PATCHES_DIR" ]]; then
   done
 fi
 
-cd "$SRC_DIR/easytier"
+cd "$SRC_DIR"
 
 # Patches may remove dependencies from Cargo.toml.  Without --locked,
 # cargo auto-updates the lockfile to match the patched manifest.
@@ -129,12 +129,15 @@ export PROTOC="${PROTOC:-$(which protoc 2>/dev/null || echo /usr/bin/protoc)}"
 # Remap paths to keep output deterministic
 export RUSTFLAGS="--remap-path-prefix=$(pwd)/="
 
+# Build from workspace root so target/ is at $SRC_DIR/target/
+# (predictable location).  --package easytier selects the member crate.
 cargo build --release \
+  --package easytier \
   --bin easytier-core \
   --no-default-features \
   --features "$LITE_FEATURES"
 
-BINARY="${SRC_DIR}/easytier/target/release/easytier-core"
+BINARY="${SRC_DIR}/target/release/easytier-core"
 echo ""
 echo "  Binary: $(ls -lh "$BINARY" | awk '{print $5, $NF}')"
 
@@ -144,9 +147,9 @@ banner "Running cargo-bloat"
 mkdir -p "$OUTPUT_DIR"
 
 cargo bloat --release \
+  --package easytier \
   --bin easytier-core \
   --crates \
-  --target-dir "${SRC_DIR}/easytier/target" \
   > "${OUTPUT_DIR}/bloat-report.txt"
 
 echo "  Report: ${OUTPUT_DIR}/bloat-report.txt"
