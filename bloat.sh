@@ -22,14 +22,26 @@
 
 set -euo pipefail
 
-# ===================== Configuration =====================
-VERSION="2.6.4"
+# ===================== Read config from Makefile =====================
+WORKSPACE="$(cd "$(dirname "$0")" && pwd)"
+
+# Extract PKG_VERSION from Makefile (e.g. "2.6.4")
+VERSION=$(sed -n 's/^PKG_VERSION:=\(.*\)$/\1/p' "${WORKSPACE}/Makefile")
+if [[ -z "$VERSION" ]]; then
+  echo "ERROR: cannot read PKG_VERSION from Makefile" >&2
+  exit 1
+fi
+
+# Extract RUST_PKG_FEATURES for the lite variant
+LITE_FEATURES=$(sed -n '/ifeq.*BUILD_VARIANT.*lite/,/endif/s/^  RUST_PKG_FEATURES:=\(.*\)$/\1/p' "${WORKSPACE}/Makefile")
+if [[ -z "$LITE_FEATURES" ]]; then
+  echo "ERROR: cannot read RUST_PKG_FEATURES (lite) from Makefile" >&2
+  exit 1
+fi
+
 SOURCE_URL="https://codeload.github.com/EasyTier/EasyTier/tar.gz/v${VERSION}"
 RUST_TARGET="x86_64-unknown-linux-musl"
 
-LITE_FEATURES="tun,magic-dns,kcp,faketcp,zstd,aes-gcm"
-
-WORKSPACE="$(cd "$(dirname "$0")" && pwd)"
 SRC_DIR="${WORKSPACE}/.bloat-src"
 OUTPUT_DIR="${WORKSPACE}/.bloat-output"
 
@@ -71,6 +83,19 @@ else
   echo "  Downloading ${SOURCE_URL}..."
   curl -sL "$SOURCE_URL" | tar -C "$SRC_DIR" --strip-components=1 -xf -
   echo "  Source extracted"
+fi
+
+# ===================== Apply patches =====================
+cd "$SRC_DIR/easytier"
+PATCHES_DIR="${WORKSPACE}/patches"
+if [[ -d "$PATCHES_DIR" ]]; then
+  echo "  Applying patches from ${PATCHES_DIR}/"
+  for patch in "${PATCHES_DIR}"/*.patch; do
+    if [[ -f "$patch" ]]; then
+      echo "    $(basename "$patch")"
+      patch -p1 < "$patch"
+    fi
+  done
 fi
 
 cd "$SRC_DIR/easytier"
