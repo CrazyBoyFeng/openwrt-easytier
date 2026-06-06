@@ -86,7 +86,10 @@ else
 fi
 
 # ===================== Apply patches =====================
-cd "$SRC_DIR/easytier"
+# Patches use paths like "easytier/Cargo.toml" (with -p1).
+# After --strip-components=1 the workspace root is $SRC_DIR/,
+# so we must stand in $SRC_DIR/ for -p1 to resolve correctly.
+cd "$SRC_DIR"
 PATCHES_DIR="${WORKSPACE}/patches"
 if [[ -d "$PATCHES_DIR" ]]; then
   echo "  Applying patches from ${PATCHES_DIR}/"

@@ -2,12 +2,6 @@ name: Bloat Analysis
 
 on:
   workflow_dispatch:
-    inputs:
-      ref:
-        description: 'Git ref (branch/tag/SHA) to analyze'
-        required: false
-        type: string
-        default: ''
 
 jobs:
   bloat:
@@ -20,8 +14,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref || '' }}
 
       - name: Install prerequisites
         run: |
