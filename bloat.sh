@@ -139,27 +139,44 @@ cargo build --release \
 
 BINARY="${SRC_DIR}/target/release/easytier-core"
 echo ""
-echo "  Binary: $(ls -lh "$BINARY" | awk '{print $5, $NF}')"
+if [[ -f "$BINARY" ]]; then
+  echo "  Binary: $(ls -lh "$BINARY" | awk '{print $5, $NF}')"
+else
+  echo "  WARNING: binary not found at ${BINARY}"
+  echo "  Files in ${SRC_DIR}/target/release/:"
+  ls -lh "${SRC_DIR}/target/release/" 2>/dev/null | head -20 || echo "    (directory not found)"
+fi
 
 # ===================== Bloat analysis =====================
 banner "Running cargo-bloat"
 
 mkdir -p "$OUTPUT_DIR"
 
-cargo bloat --release \
+if cargo bloat --release \
   --package easytier \
   --bin easytier-core \
   --crates \
-  > "${OUTPUT_DIR}/bloat-report.txt"
-
-echo "  Report: ${OUTPUT_DIR}/bloat-report.txt"
+  > "${OUTPUT_DIR}/bloat-report.txt" 2>&1; then
+  echo "  cargo bloat succeeded"
+else
+  echo "  cargo bloat failed (exit $?)"
+fi
+echo "  bloat-report.txt: $(wc -c < "${OUTPUT_DIR}/bloat-report.txt") bytes, $(wc -l < "${OUTPUT_DIR}/bloat-report.txt") lines"
+head -5 "${OUTPUT_DIR}/bloat-report.txt"
 
 # ===================== Copy binary =====================
-cp "$BINARY" "${OUTPUT_DIR}/easytier-core"
-echo "  Binary: ${OUTPUT_DIR}/easytier-core ($(ls -lh "${OUTPUT_DIR}/easytier-core" | awk '{print $5}'))"
+if [[ -f "$BINARY" ]]; then
+  cp "$BINARY" "${OUTPUT_DIR}/easytier-core"
+  echo "  Binary copied: $(ls -lh "${OUTPUT_DIR}/easytier-core" | awk '{print $5}')"
+else
+  echo "  WARNING: skipping binary copy, file not found"
+fi
 
-# ===================== Cleanup source =====================
+echo ""
+echo "  Contents of ${OUTPUT_DIR}/:"
+ls -lh "$OUTPUT_DIR/"
+
+# ===================== Done =====================
 cd "$WORKSPACE"
-rm -rf "$SRC_DIR"
 echo ""
 echo "=== Bloat analysis complete ==="
