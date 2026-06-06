@@ -26,7 +26,7 @@ jobs:
       - name: Install prerequisites
         run: |
           sudo apt-get update && sudo apt-get install -y \
-            protobuf-compiler clang libclang-dev
+            protobuf-compiler clang libclang-dev musl-tools
           if ! command -v rustup &>/dev/null; then
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
               | sh -s -- -y --default-toolchain stable

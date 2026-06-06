@@ -103,12 +103,10 @@ fi
 
 cd "$SRC_DIR/easytier"
 
-# Patches may remove dependencies from Cargo.toml.  Remove the stale
-# lockfile so cargo can resolve deps from the patched manifest.
-if [[ -d "$PATCHES_DIR" ]]; then
-  echo "  Removing stale Cargo.lock after patching..."
-  rm -f "${SRC_DIR}/Cargo.lock"
-fi
+# Patches may remove dependencies from Cargo.toml.  Without --locked,
+# cargo auto-updates the lockfile to match the patched manifest.
+# Do NOT delete Cargo.lock — keeping pinned versions avoids pulling
+# incompatible latest deps from crates.io.
 
 # ===================== Build =====================
 banner "Building easytier-core (lite) for bloat analysis"
@@ -125,6 +123,9 @@ export CARGO_PROFILE_RELEASE_DEBUG=true
 export CARGO_PROFILE_RELEASE_OPT_LEVEL=z
 export CARGO_PROFILE_RELEASE_PANIC=abort
 export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
+
+# Set PROTOC explicitly (same as Makefile CARGO_PKG_VARS)
+export PROTOC="${PROTOC:-$(which protoc 2>/dev/null || echo /usr/bin/protoc)}"
 
 # Remap paths to keep output deterministic
 export RUSTFLAGS="--remap-path-prefix=$(pwd)/="
