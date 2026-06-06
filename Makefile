@@ -132,11 +132,6 @@ export CARGO_PROFILE_RELEASE_STRIP=true
 # Approximate savings: ~200-300 KB per binary.
 export RUSTFLAGS := --remap-path-prefix="$(CURDIR)/=" --remap-path-prefix="$(PKG_BUILD_DIR)/="
 
-# OBJCOPY is not set by rust-package.mk's Build/Compile/Cargo context.
-# Must use the target toolchain objcopy to handle cross-arch ELF binaries
-# (e.g. aarch64 binary cannot be processed by x86_64 host objcopy).
-OBJCOPY ?= $(TARGET_CROSS)objcopy
-
 # easytier is a workspace member, pass subdirectory path to cargo.
 # Only build easytier-core (skip easytier-cli which is not packaged).
 # Each Build/Compile is a single line (no backslash continuation)
@@ -144,12 +139,12 @@ OBJCOPY ?= $(TARGET_CROSS)objcopy
 
 ifeq ($(BUILD_VARIANT),lite)
 # EASYTIER_COMPILE_LITE
-Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core --no-default-features) && $(OBJCOPY) --remove-section=.eh_frame --remove-section=.eh_frame_hdr $(PKG_INSTALL_DIR)/bin/easytier-core
+Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core --no-default-features)
 endif
 
 ifeq ($(BUILD_VARIANT),default)
 # EASYTIER_COMPILE_DEFAULT
-Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core) && $(OBJCOPY) --remove-section=.eh_frame --remove-section=.eh_frame_hdr $(PKG_INSTALL_DIR)/bin/easytier-core
+Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core)
 endif
 
 # Override Build/Prepare to handle case-sensitive directory name
