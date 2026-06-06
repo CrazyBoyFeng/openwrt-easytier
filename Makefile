@@ -139,12 +139,12 @@ export RUSTFLAGS := --remap-path-prefix="$(CURDIR)/=" --remap-path-prefix="$(PKG
 
 ifeq ($(BUILD_VARIANT),lite)
 # EASYTIER_COMPILE_LITE
-Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core --no-default-features)
+Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core --no-default-features) && $(STRIP) --remove-section=.eh_frame --remove-section=.eh_frame_hdr $(PKG_INSTALL_DIR)/bin/easytier-core
 endif
 
 ifeq ($(BUILD_VARIANT),default)
 # EASYTIER_COMPILE_DEFAULT
-Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core)
+Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core) && $(STRIP) --remove-section=.eh_frame --remove-section=.eh_frame_hdr $(PKG_INSTALL_DIR)/bin/easytier-core
 endif
 
 # Override Build/Prepare to handle case-sensitive directory name

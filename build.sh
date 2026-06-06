@@ -227,8 +227,8 @@ run_step1() {
   # -Zbuild-std variants.  Anchors on EASYTIER_COMPILE_* comment markers.
   if [[ "$SLUG" == "ramips-mt7621" ]]; then
     echo "--- Injecting -Z build-std for tier-3 target ---"
-    sed -i '/^# EASYTIER_COMPILE_LITE/{n;s|.*|Build/Compile=$(CARGO_PKG_VARS) cargo $(CARGO_PKG_ARGS) -Z build-std=std,panic_abort install -v --profile $(CARGO_PKG_PROFILE) --features "$(strip $(RUST_PKG_FEATURES))" --root $(PKG_INSTALL_DIR) --path "$(PKG_BUILD_DIR)/easytier" --bin easytier-core --no-default-features|}' package/easytier/Makefile
-    sed -i '/^# EASYTIER_COMPILE_DEFAULT/{n;s|.*|Build/Compile=$(CARGO_PKG_VARS) cargo $(CARGO_PKG_ARGS) -Z build-std=std,panic_abort install -v --profile $(CARGO_PKG_PROFILE) --root $(PKG_INSTALL_DIR) --path "$(PKG_BUILD_DIR)/easytier" --bin easytier-core|}' package/easytier/Makefile
+    sed -i '/^# EASYTIER_COMPILE_LITE/{n;s|.*|Build/Compile=$(CARGO_PKG_VARS) cargo $(CARGO_PKG_ARGS) -Z build-std=std,panic_abort install -v --profile $(CARGO_PKG_PROFILE) --features "$(strip $(RUST_PKG_FEATURES))" --root $(PKG_INSTALL_DIR) --path "$(PKG_BUILD_DIR)/easytier" --bin easytier-core --no-default-features \&\& $(STRIP) --remove-section=.eh_frame --remove-section=.eh_frame_hdr $(PKG_INSTALL_DIR)/bin/easytier-core|}' package/easytier/Makefile
+    sed -i '/^# EASYTIER_COMPILE_DEFAULT/{n;s|.*|Build/Compile=$(CARGO_PKG_VARS) cargo $(CARGO_PKG_ARGS) -Z build-std=std,panic_abort install -v --profile $(CARGO_PKG_PROFILE) --root $(PKG_INSTALL_DIR) --path "$(PKG_BUILD_DIR)/easytier" --bin easytier-core \&\& $(STRIP) --remove-section=.eh_frame --remove-section=.eh_frame_hdr $(PKG_INSTALL_DIR)/bin/easytier-core|}' package/easytier/Makefile
   fi
 
   # --- Configure & build ---
