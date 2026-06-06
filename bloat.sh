@@ -134,7 +134,7 @@ cargo build --release \
   --no-default-features \
   --features "$LITE_FEATURES"
 
-BINARY="target/release/easytier-core"
+BINARY="${SRC_DIR}/easytier/target/release/easytier-core"
 echo ""
 echo "  Binary: $(ls -lh "$BINARY" | awk '{print $5, $NF}')"
 
@@ -146,7 +146,7 @@ mkdir -p "$OUTPUT_DIR"
 cargo bloat --release \
   --bin easytier-core \
   --crates \
-  --target-dir target \
+  --target-dir "${SRC_DIR}/easytier/target" \
   > "${OUTPUT_DIR}/bloat-report.txt"
 
 echo "  Report: ${OUTPUT_DIR}/bloat-report.txt"
