@@ -17,10 +17,10 @@
 #   ./bloat.sh              # Build + analyze + save
 #
 # Output:
-#   output/bloat-report.txt  — per-crate text breakdown
-#   output/easytier-core     — the unstripped ELF binary
+#   .bloat-output/bloat-report.txt  — per-crate text breakdown
+#   .bloat-output/easytier-core     — the unstripped ELF binary
 
-set -euo pipefail
+set -uo pipefail
 
 # ===================== Read config from Makefile =====================
 WORKSPACE="$(cd "$(dirname "$0")" && pwd)"
@@ -102,15 +102,14 @@ fi
 
 cd "$SRC_DIR"
 
-# Patches may remove dependencies from Cargo.toml.  Without --locked,
-# cargo auto-updates the lockfile to match the patched manifest.
-# Do NOT delete Cargo.lock — keeping pinned versions avoids pulling
-# incompatible latest deps from crates.io.
-
 # ===================== Build =====================
 banner "Building easytier-core (lite) for bloat analysis"
-echo "  Target:  ${HOST_TARGET}"
-echo "  Features: ${LITE_FEATURES}"
+echo "  WORKSPACE:  ${WORKSPACE}"
+echo "  SRC_DIR:    ${SRC_DIR}"
+echo "  OUTPUT_DIR: ${OUTPUT_DIR}"
+echo "  pwd:        $(pwd)"
+echo "  Target:     ${HOST_TARGET}"
+echo "  Features:   ${LITE_FEATURES}"
 echo "  LTO: off"
 echo "  Strip: false"
 echo "  Debug: true"
@@ -130,12 +129,13 @@ export PROTOC="${PROTOC:-$(which protoc 2>/dev/null || echo /usr/bin/protoc)}"
 export RUSTFLAGS="--remap-path-prefix=$(pwd)/="
 
 # Build from workspace root so target/ is at $SRC_DIR/target/
-# (predictable location).  --package easytier selects the member crate.
+# --path easytier selects the member crate (matches Makefile approach).
 cargo build --release \
-  --package easytier \
+  --path easytier \
   --bin easytier-core \
   --no-default-features \
-  --features "$LITE_FEATURES"
+  --features "$LITE_FEATURES" \
+  || { echo "ERROR: cargo build failed" >&2; exit 1; }
 
 BINARY="${SRC_DIR}/target/release/easytier-core"
 echo ""
@@ -143,8 +143,8 @@ if [[ -f "$BINARY" ]]; then
   echo "  Binary: $(ls -lh "$BINARY" | awk '{print $5, $NF}')"
 else
   echo "  WARNING: binary not found at ${BINARY}"
-  echo "  Files in ${SRC_DIR}/target/release/:"
-  ls -lh "${SRC_DIR}/target/release/" 2>/dev/null | head -20 || echo "    (directory not found)"
+  echo "  Looking for easytier-core in ${SRC_DIR}/target/:"
+  find "${SRC_DIR}/target/" -name 'easytier-core' -type f 2>/dev/null || echo "    (not found)"
 fi
 
 # ===================== Bloat analysis =====================
@@ -152,24 +152,24 @@ banner "Running cargo-bloat"
 
 mkdir -p "$OUTPUT_DIR"
 
-if cargo bloat --release \
-  --package easytier \
+echo "  Running cargo bloat..."
+cargo bloat --release \
+  --path easytier \
   --bin easytier-core \
   --crates \
-  > "${OUTPUT_DIR}/bloat-report.txt" 2>&1; then
-  echo "  cargo bloat succeeded"
-else
-  echo "  cargo bloat failed (exit $?)"
-fi
-echo "  bloat-report.txt: $(wc -c < "${OUTPUT_DIR}/bloat-report.txt") bytes, $(wc -l < "${OUTPUT_DIR}/bloat-report.txt") lines"
-head -5 "${OUTPUT_DIR}/bloat-report.txt"
+  > "${OUTPUT_DIR}/bloat-report.txt" 2>&1 \
+  || echo "  WARNING: cargo bloat exited non-zero"
+
+echo "  bloat-report.txt: $(wc -l < "${OUTPUT_DIR}/bloat-report.txt" 2>/dev/null || echo '?') lines"
+echo "  First 3 lines:"
+head -3 "${OUTPUT_DIR}/bloat-report.txt" 2>/dev/null
 
 # ===================== Copy binary =====================
 if [[ -f "$BINARY" ]]; then
   cp "$BINARY" "${OUTPUT_DIR}/easytier-core"
-  echo "  Binary copied: $(ls -lh "${OUTPUT_DIR}/easytier-core" | awk '{print $5}')"
+  echo "  Binary copied to ${OUTPUT_DIR}/easytier-core"
 else
-  echo "  WARNING: skipping binary copy, file not found"
+  echo "  WARNING: skipping binary copy, file not found at ${BINARY}"
 fi
 
 echo ""
