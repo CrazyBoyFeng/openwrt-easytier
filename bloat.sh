@@ -100,8 +100,6 @@ if [[ -d "$PATCHES_DIR" ]]; then
   done
 fi
 
-cd "$SRC_DIR"
-
 # ===================== Build =====================
 banner "Building easytier-core (lite) for bloat analysis"
 echo "  WORKSPACE:  ${WORKSPACE}"
@@ -122,29 +120,31 @@ export CARGO_PROFILE_RELEASE_OPT_LEVEL=z
 export CARGO_PROFILE_RELEASE_PANIC=abort
 export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
 
+# Force target dir to a known absolute path (eliminates all guessing
+# about where cargo puts build artifacts in a workspace).
+export CARGO_TARGET_DIR="${SRC_DIR}/target"
+
 # Set PROTOC explicitly (same as Makefile CARGO_PKG_VARS)
 export PROTOC="${PROTOC:-$(which protoc 2>/dev/null || echo /usr/bin/protoc)}"
 
 # Remap paths to keep output deterministic
 export RUSTFLAGS="--remap-path-prefix=$(pwd)/="
 
-# Build from workspace root so target/ is at $SRC_DIR/target/.
-# --package easytier selects the workspace member crate.
+# Build from workspace root.  --package easytier selects the member.
 cargo build --release \
   --package easytier \
   --bin easytier-core \
   --no-default-features \
-  --features "$LITE_FEATURES" \
-  || { echo "ERROR: cargo build failed" >&2; exit 1; }
+  --features "$LITE_FEATURES"
 
-BINARY="${SRC_DIR}/target/release/easytier-core"
+BINARY="${CARGO_TARGET_DIR}/release/easytier-core"
 echo ""
 if [[ -f "$BINARY" ]]; then
   echo "  Binary: $(ls -lh "$BINARY" | awk '{print $5, $NF}')"
 else
   echo "  WARNING: binary not found at ${BINARY}"
-  echo "  Looking for easytier-core in ${SRC_DIR}/target/:"
-  find "${SRC_DIR}/target/" -name 'easytier-core' -type f 2>/dev/null || echo "    (not found)"
+  echo "  find in ${CARGO_TARGET_DIR}:"
+  find "${CARGO_TARGET_DIR}" -name 'easytier-core' -type f 2>/dev/null || echo "    (not found)"
 fi
 
 # ===================== Bloat analysis =====================
@@ -157,10 +157,11 @@ cargo bloat --release \
   --package easytier \
   --bin easytier-core \
   --crates \
-  > "${OUTPUT_DIR}/bloat-report.txt" 2>&1 \
-  || echo "  WARNING: cargo bloat exited non-zero"
+  > "${OUTPUT_DIR}/bloat-report.txt" 2>&1
 
-echo "  bloat-report.txt: $(wc -l < "${OUTPUT_DIR}/bloat-report.txt" 2>/dev/null || echo '?') lines"
+BLOAT_EXIT=$?
+echo "  cargo bloat exit: ${BLOAT_EXIT}"
+echo "  bloat-report.txt: $(wc -l < "${OUTPUT_DIR}/bloat-report.txt" 2>/dev/null || echo '0') lines"
 echo "  First 3 lines:"
 head -3 "${OUTPUT_DIR}/bloat-report.txt" 2>/dev/null
 
