@@ -103,6 +103,13 @@ fi
 
 cd "$SRC_DIR/easytier"
 
+# Patches may remove dependencies from Cargo.toml.  Update the lockfile
+# so --locked can validate against the patched manifest.
+if [[ -d "$PATCHES_DIR" ]]; then
+  echo "  Updating Cargo.lock after patching..."
+  cargo update --workspace 2>/dev/null || true
+fi
+
 # ===================== Build =====================
 banner "Building easytier-core (lite) for bloat analysis"
 echo "  Target:  ${RUST_TARGET}"
