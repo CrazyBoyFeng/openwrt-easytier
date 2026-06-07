@@ -160,20 +160,28 @@ fi
 mkdir -p "$OUTPUT_DIR"
 banner "Running cargo-bloat"
 
-# cargo-bloat needs to find the binary via cargo metadata, so we run it
-# from $SRC_DIR/easytier with CARGO_TARGET_DIR pointing to the target dir
-# that cargo install used.  We specify --bin easytier-core and --crates.
-# cargo-bloat only parses DWARF debug info from the existing binary;
-# it does NOT recompile.
+# cargo-bloat internally runs cargo build, which discovers the workspace
+# root Cargo.toml and triggers feature unification across all members.
+# Temporarily remove the workspace root Cargo.toml so cargo treats
+# easytier as a standalone crate, matching what cargo install --path does.
+# The binary in $CARGO_TARGET_DIR/release/ from cargo install was compiled
+# in standalone mode; cargo-bloat will reuse it or rebuild the same way.
+WS_CARGO_TOML="$SRC_DIR/Cargo.toml"
+if [[ -f "$WS_CARGO_TOML" ]]; then
+  mv "$WS_CARGO_TOML" "$WS_CARGO_TOML.bak"
+fi
 (
   cd "$SRC_DIR/easytier"
-  echo "  Analyzing binary from target dir: ${CARGO_TARGET_DIR}"
+  echo "  Analyzing binary (standalone, no workspace)"
   cargo bloat --release \
     --bin easytier-core \
     --crates \
     > "${OUTPUT_DIR}/bloat-report.txt" 2>&1 \
     || true
 )
+if [[ -f "$WS_CARGO_TOML.bak" ]]; then
+  mv "$WS_CARGO_TOML.bak" "$WS_CARGO_TOML"
+fi
 
 echo "  bloat-report.txt: $(wc -l < "${OUTPUT_DIR}/bloat-report.txt" 2>/dev/null || echo '0') lines"
 echo "  First 3 lines:"
