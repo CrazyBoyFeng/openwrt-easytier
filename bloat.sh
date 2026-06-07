@@ -282,7 +282,9 @@ else
   # Cargo.lock has [[package]] entries with name + dependencies.
   # We parse both with Python, compute recursive sizes, and output a
   # table sorted by inclusive VM size descending.
-  SRC_DIR="$SRC_DIR" BLOATY_RAW="$BLOATY_RAW" python3 << 'PYEOF' > "$INCLUSIVE_REPORT"
+  # Write Python script to a temp file to avoid heredoc issues
+  PY_SCRIPT=$(mktemp /tmp/inclusive_XXXXXX.py)
+  cat > "$PY_SCRIPT" << 'PYSCRIPT'
 import re, os, sys
 
 src_dir = os.environ.get('SRC_DIR', '.')
@@ -345,6 +347,8 @@ with open(bloaty_raw) as f:
             name = m.group(1) if m else path
         self_sizes[name] = self_sizes.get(name, 0) + vm_bytes
 
+sys.stdout.reconfigure(line_buffering=True)
+
 # Compute inclusive sizes (DFS with per-root visited set for diamond deps)
 inclusive = {}
 def dfs(crate, visited):
@@ -370,7 +374,7 @@ rows.sort(key=lambda x: -x[2])
 # Print table
 total_self = sum(self_sizes.values())
 print("Inclusive Size Analysis (VM Size)")
-print(f"Per-crate self sizes total: {fmt(total_self)} ({len(self_sizes)} crates)")
+print(f"Per-crate self sizes total: {fmt(total_self)} ({len(self_sizes)} crates from bloaty)")
 print(f"Dependency graph: {len(graph)} crates from Cargo.lock")
 print()
 print(f"{'Crate':<35} {'Self':>8} {'Inclusive':>10} {'Deps':>5}")
@@ -378,7 +382,10 @@ print('-' * 62)
 for name, s, inc, nd in rows:
     print(f"{name:<35} {fmt(s):>8} {fmt(inc):>10} {nd:>5}")
 print('-' * 62)
-PYEOF
+PYSCRIPT
+
+  SRC_DIR="$SRC_DIR" BLOATY_RAW="$BLOATY_RAW" python3 "$PY_SCRIPT" > "$INCLUSIVE_REPORT"
+  rm -f "$PY_SCRIPT"
 
   echo "  inclusive-size-report.txt: $(wc -l < "$INCLUSIVE_REPORT" 2>/dev/null || echo '0') lines"
   echo "  First 5 lines:"
