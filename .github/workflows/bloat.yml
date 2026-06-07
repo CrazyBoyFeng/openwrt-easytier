@@ -1,0 +1,56 @@
+name: Bloat Analysis
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git ref (branch/tag/SHA) to analyze'
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  bloat:
+    name: bloat
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      TERM: xterm
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || '' }}
+
+      - name: Install prerequisites
+        run: |
+          sudo apt-get update && sudo apt-get install -y \
+            protobuf-compiler clang libclang-dev
+          if ! command -v rustup &>/dev/null; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+              | sh -s -- -y --default-toolchain stable
+          fi
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Build and analyze
+        run: bash ./bloat.sh
+
+      - name: Verify output directory
+        run: |
+          echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
+          echo "Contents of ${GITHUB_WORKSPACE}/bloat-output/:"
+          ls -lhR "${GITHUB_WORKSPACE}/bloat-output/" || echo "  (directory not found or empty)"
+          find "${GITHUB_WORKSPACE}/bloat-output/" -type f -exec ls -lh {} \; || echo "  (no files found)"
+
+      - name: Read host arch
+        id: arch
+        run: |
+          echo "value=$(rustc -vV | sed -n 's/^host: //p' | cut -d- -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: easytier-bloat-${{ steps.arch.outputs.value }}
+          path: ${{ github.workspace }}/bloat-output/
+          if-no-files-found: error

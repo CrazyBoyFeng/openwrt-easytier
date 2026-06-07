@@ -1,0 +1,40 @@
+# Binaries
+*.o
+*.so
+*.a
+easytier-core
+easytier-cli
+
+# Build artifacts
+*.ipk
+*.pkg
+workdir/
+staging_dir/
+target/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+.gitmodules
+
+# Environment
+.env
+
+# Skills (AI system, not project files)
+skills/
+
+# Download output
+download/
+
+# Research / temp data
+*.json
+worklog.md
+
+# Upload staging
+upload/
