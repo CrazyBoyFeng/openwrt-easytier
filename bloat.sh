@@ -100,11 +100,9 @@ if [[ -d "$PATCHES_DIR" ]]; then
   done
 fi
 
-# Remove upstream Cargo.lock so cargo resolves dependencies fresh based
-# on the patched Cargo.toml and the selected features only.
-# The upstream lockfile was generated with all default features (wireguard,
-# quic, websocket, ...) which would pull in unnecessary crates.
-rm -f "$SRC_DIR/Cargo.lock"
+# Keep Cargo.lock and use --locked, same as the Makefile.
+# Without --locked, cargo resolves the latest versions from crates.io,
+# which can break and produces non-deterministic results.
 
 # ===================== Build =====================
 banner "Building easytier-core (lite) for bloat analysis"
@@ -136,19 +134,19 @@ export PROTOC="${PROTOC:-$(which protoc 2>/dev/null || echo /usr/bin/protoc)}"
 # Remap paths to keep output deterministic
 export RUSTFLAGS="--remap-path-prefix=$(pwd)/="
 
-# Build with --manifest-path pointing to easytier/Cargo.toml, treating
-# easytier/ as a standalone crate outside the workspace.  This avoids
-# feature unification from other workspace members (e.g. easytier-web's
-# reqwest rustls-tls pulling in ring/rustls/quinn unnecessarily).
-# This matches the Makefile's approach: cargo install --path easytier --locked.
-cargo build --release \
-  --manifest-path "$SRC_DIR/easytier/Cargo.toml" \
+# Use cargo install --path, identical to the Makefile's Build/Compile.
+# cargo install --path treats the crate as standalone (no workspace
+# feature unification), unlike cargo build which always discovers
+# the workspace root and unifies features across all members.
+cargo install --path "$SRC_DIR/easytier" \
+  --locked \
   --bin easytier-core \
   --no-default-features \
   --features "$LITE_FEATURES" \
-  || { echo "ERROR: cargo build failed (exit $?)" >&2; exit 1; }
+  --root "$SRC_DIR/install" \
+  || { echo "ERROR: cargo install failed (exit $?)" >&2; exit 1; }
 
-BINARY="${CARGO_TARGET_DIR}/release/easytier-core"
+BINARY="$SRC_DIR/install/bin/easytier-core"
 echo ""
 if [[ -f "$BINARY" ]]; then
   echo "  Binary: $(ls -lh "$BINARY" | awk '{print $5, $NF}')"
@@ -159,15 +157,60 @@ else
 fi
 
 # ===================== Bloat analysis =====================
+mkdir -p "$OUTPUT_DIR"
 banner "Running cargo-bloat"
 
-echo "  Running cargo bloat..."
-cargo bloat --release \
-  --package easytier \
-  --bin easytier-core \
-  --crates \
-  > "${OUTPUT_DIR}/bloat-report.txt" 2>&1 \
-  || true
+# cargo-bloat internally runs cargo build, which discovers the workspace
+# root Cargo.toml and triggers feature unification across all members
+# (resolver v2).  Other workspace members (easytier-web, easytier-gui)
+# enable features like quic, websocket → rustls, which get unified into
+# every member — including easytier-core.  This pollutes the bloat report.
+#
+# Fix: temporarily replace the workspace Cargo.toml with a minimal version
+# that only includes "easytier" as a member.  This keeps workspace.package
+# (edition, rust-version) working so that edition.workspace = true etc.
+# still resolve, but eliminates feature unification from other members.
+# cargo-bloat then compiles with --no-default-features --features $LITE_FEATURES
+# (same as the Makefile's Build/Compile for the lite variant).
+WS_CARGO_TOML="$SRC_DIR/Cargo.toml"
+if [[ -f "$WS_CARGO_TOML" ]]; then
+  cp "$WS_CARGO_TOML" "$WS_CARGO_TOML.bak"
+  cat > "$WS_CARGO_TOML" <<'WS_EOF'
+[workspace]
+resolver = "2"
+members = ["easytier"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.95"
+
+[profile.dev]
+panic = "unwind"
+debug = 2
+
+[profile.release]
+panic = "abort"
+lto = true
+codegen-units = 1
+opt-level = 3
+strip = true
+WS_EOF
+fi
+(
+  cd "$SRC_DIR/easytier"
+  echo "  Analyzing binary (easytier-only workspace, no cross-member unification)"
+  echo "  Features: --no-default-features --features ${LITE_FEATURES}"
+  cargo bloat --release \
+    --bin easytier-core \
+    --crates \
+    --no-default-features \
+    --features "$LITE_FEATURES" \
+    > "${OUTPUT_DIR}/bloat-report.txt" 2>&1 \
+    || true
+)
+if [[ -f "$WS_CARGO_TOML.bak" ]]; then
+  mv "$WS_CARGO_TOML.bak" "$WS_CARGO_TOML"
+fi
 
 echo "  bloat-report.txt: $(wc -l < "${OUTPUT_DIR}/bloat-report.txt" 2>/dev/null || echo '0') lines"
 echo "  First 3 lines:"
