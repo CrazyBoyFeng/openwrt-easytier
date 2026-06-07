@@ -100,6 +100,12 @@ if [[ -d "$PATCHES_DIR" ]]; then
   done
 fi
 
+# Remove upstream Cargo.lock so cargo resolves dependencies fresh based
+# on the patched Cargo.toml and the selected features only.
+# The upstream lockfile was generated with all default features (wireguard,
+# quic, websocket, ...) which would pull in unnecessary crates.
+rm -f "$SRC_DIR/Cargo.lock"
+
 # ===================== Build =====================
 banner "Building easytier-core (lite) for bloat analysis"
 echo "  WORKSPACE:  ${WORKSPACE}"
