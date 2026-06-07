@@ -61,25 +61,33 @@ banner() {
 }
 
 banner "Installing bloaty"
-BLOATY_VERSION="1.1"
+BLOATY_VERSION="v1.1"
 BLOATY_DIR="${WORKSPACE}/.bloaty"
-if [[ ! -d "$BLOATY_DIR" ]]; then
-  mkdir -p "$BLOATY_DIR"
-fi
-BLOATY_BIN="$(
-  find "$BLOATY_DIR" -name 'bloaty' -type f -print -quit 2>/dev/null || true
-)"
-if [[ -z "$BLOATY_BIN" || ! -x "$BLOATY_BIN" ]]; then
-  echo "  Downloading bloaty v${BLOATY_VERSION} for x86_64-linux..."
-  curl -sL "https://github.com/google/bloaty/releases/download/v${BLOATY_VERSION}/bloaty-${BLOATY_VERSION}-x86_64-linux.tar.gz" \
-    | tar -xz -C "$BLOATY_DIR"
-  # The tarball may contain bloaty at top level or in a subdirectory
-  BLOATY_BIN="$(find "$BLOATY_DIR" -name 'bloaty' -type f -print -quit 2>/dev/null || true)"
-  if [[ -z "$BLOATY_BIN" ]]; then
-    echo "ERROR: bloaty binary not found after extraction" >&2
+BLOATY_SRC="$BLOATY_DIR/src"
+BLOATY_INSTALL_PREFIX="$BLOATY_DIR/prefix"
+BLOATY_BIN="$BLOATY_INSTALL_PREFIX/bin/bloaty"
+if [[ ! -x "$BLOATY_BIN" ]]; then
+  echo "  Building bloaty ${BLOATY_VERSION} from source..."
+  rm -rf "$BLOATY_DIR"
+  mkdir -p "$BLOATY_SRC" "$BLOATY_INSTALL_PREFIX"
+  # Install build dependencies
+  sudo apt-get update -qq
+  sudo apt-get install -y --no-install-recommends cmake ninja-build
+  # Clone bloaty source and build
+  git clone https://github.com/google/bloaty.git "$BLOATY_SRC"
+  git -C "$BLOATY_SRC" checkout "tags/${BLOATY_VERSION}"
+  git -C "$BLOATY_SRC" submodule update --init --recursive
+  cmake -B "$BLOATY_SRC/build" -G Ninja -S "$BLOATY_SRC" \
+    -DCMAKE_INSTALL_PREFIX="$BLOATY_INSTALL_PREFIX"
+  cmake --build "$BLOATY_SRC/build"
+  cmake --build "$BLOATY_SRC/build" --target install
+  if [[ ! -x "$BLOATY_BIN" ]]; then
+    echo "ERROR: bloaty binary not found after build" >&2
     exit 1
   fi
-  chmod +x "$BLOATY_BIN"
+  echo "  bloaty installed: ${BLOATY_BIN}"
+else
+  echo "  bloaty already installed: ${BLOATY_BIN}"
 fi
 
 banner "Setting up Rust toolchain"
