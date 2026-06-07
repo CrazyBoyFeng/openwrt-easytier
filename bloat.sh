@@ -3,15 +3,20 @@
 # Copyright (C) 2025 CrazyBoyFeng
 #
 # bloat.sh - Build easytier-core (lite) with DWARF debug info and run
-# cargo-bloat for per-crate size analysis.
+# bloaty for per-crate size analysis.
 #
 # This is a standalone analysis tool — it does NOT use the OpenWrt SDK or
 # produce any packages.  It builds directly with cargo on the host.
 #
 # Key differences from the production build:
-#   - LTO=off   : preserves DWARF compile-unit → crate attribution
-#   - strip=false: keeps symbol table for cargo-bloat
+#   - LTO=off   : preserves DWARF compile-unit -> crate attribution
+#   - strip=false: keeps symbol table + debug sections
 #   - debug=true : emits DWARF debug info
+#
+# Analysis uses bloaty (Google's binary size profiler) which reads DWARF
+# debug info directly from the ELF binary — no cargo project context needed.
+# This completely avoids workspace feature unification issues that plagued
+# cargo-bloat (which internally runs cargo build).
 #
 # Usage:
 #   ./bloat.sh              # Build + analyze + save
@@ -55,9 +60,26 @@ banner() {
   echo ""
 }
 
-banner "Installing cargo-bloat"
-if ! command -v cargo-bloat &>/dev/null; then
-  cargo install cargo-bloat --locked
+banner "Installing bloaty"
+BLOATY_VERSION="1.1"
+BLOATY_DIR="${WORKSPACE}/.bloaty"
+if [[ ! -d "$BLOATY_DIR" ]]; then
+  mkdir -p "$BLOATY_DIR"
+fi
+BLOATY_BIN="$(
+  find "$BLOATY_DIR" -name 'bloaty' -type f -print -quit 2>/dev/null || true
+)"
+if [[ -z "$BLOATY_BIN" || ! -x "$BLOATY_BIN" ]]; then
+  echo "  Downloading bloaty v${BLOATY_VERSION} for x86_64-linux..."
+  curl -sL "https://github.com/google/bloaty/releases/download/v${BLOATY_VERSION}/bloaty-${BLOATY_VERSION}-x86_64-linux.tar.gz" \
+    | tar -xz -C "$BLOATY_DIR"
+  # The tarball may contain bloaty at top level or in a subdirectory
+  BLOATY_BIN="$(find "$BLOATY_DIR" -name 'bloaty' -type f -print -quit 2>/dev/null || true)"
+  if [[ -z "$BLOATY_BIN" ]]; then
+    echo "ERROR: bloaty binary not found after extraction" >&2
+    exit 1
+  fi
+  chmod +x "$BLOATY_BIN"
 fi
 
 banner "Setting up Rust toolchain"
@@ -67,9 +89,9 @@ if ! command -v rustup &>/dev/null; then
 fi
 rustup default stable
 
-echo "  Rust: $(rustc --version)"
-echo "  Cargo: $(cargo --version)"
-echo "  cargo-bloat: $(cargo bloat --version 2>/dev/null | head -1 || echo 'unknown')"
+echo "  Rust:    $(rustc --version)"
+echo "  Cargo:   $(cargo --version)"
+echo "  bloaty:  $($BLOATY_BIN --version 2>/dev/null | head -1 || echo 'unknown')"
 
 # ===================== Prepare source =====================
 banner "Preparing EasyTier source (v${VERSION})"
@@ -158,63 +180,66 @@ fi
 
 # ===================== Bloat analysis =====================
 mkdir -p "$OUTPUT_DIR"
-banner "Running cargo-bloat"
+banner "Running bloaty"
 
-# cargo-bloat internally runs cargo build, which discovers the workspace
-# root Cargo.toml and triggers feature unification across all members
-# (resolver v2).  Other workspace members (easytier-web, easytier-gui)
-# enable features like quic, websocket → rustls, which get unified into
-# every member — including easytier-core.  This pollutes the bloat report.
-#
-# Fix: temporarily replace the workspace Cargo.toml with a minimal version
-# that only includes "easytier" as a member.  This keeps workspace.package
-# (edition, rust-version) working so that edition.workspace = true etc.
-# still resolve, but eliminates feature unification from other members.
-# cargo-bloat then compiles with --no-default-features --features $LITE_FEATURES
-# (same as the Makefile's Build/Compile for the lite variant).
-WS_CARGO_TOML="$SRC_DIR/Cargo.toml"
-if [[ -f "$WS_CARGO_TOML" ]]; then
-  cp "$WS_CARGO_TOML" "$WS_CARGO_TOML.bak"
-  cat > "$WS_CARGO_TOML" <<'WS_EOF'
-[workspace]
-resolver = "2"
-members = ["easytier"]
+echo "  Analyzing: ${BINARY}"
+echo "  Method: bloaty reads DWARF debug info directly from binary"
+echo "  (no cargo project context — no workspace feature unification possible)"
+echo ""
 
-[workspace.package]
-edition = "2024"
-rust-version = "1.95"
+# bloaty with the compileunits data source reads DWARF .debug_info
+# to break down binary size per compile unit.  With CODEGEN_UNITS=1,
+# each Rust crate = exactly one compile unit.  bloaty needs no cargo
+# project — it parses the ELF binary's embedded DWARF sections directly.
+BLOATY_RAW="${OUTPUT_DIR}/bloaty-raw.txt"
+BLOATY_REPORT="${OUTPUT_DIR}/bloat-report.txt"
 
-[profile.dev]
-panic = "unwind"
-debug = 2
+"$BLOATY_BIN" "$BINARY" -- compileunits \
+  > "$BLOATY_RAW" 2>&1 \
+  || { echo "ERROR: bloaty failed (exit $?)" >&2; exit 1; }
 
-[profile.release]
-panic = "abort"
-lto = true
-codegen-units = 1
-opt-level = 3
-strip = true
-WS_EOF
-fi
-(
-  cd "$SRC_DIR/easytier"
-  echo "  Analyzing binary (easytier-only workspace, no cross-member unification)"
-  echo "  Features: --no-default-features --features ${LITE_FEATURES}"
-  cargo bloat --release \
-    --bin easytier-core \
-    --crates \
-    --no-default-features \
-    --features "$LITE_FEATURES" \
-    > "${OUTPUT_DIR}/bloat-report.txt" 2>&1 \
-    || true
-)
-if [[ -f "$WS_CARGO_TOML.bak" ]]; then
-  mv "$WS_CARGO_TOML.bak" "$WS_CARGO_TOML"
-fi
+# Post-process: replace DWARF compile unit file paths with clean crate names.
+# DWARF paths (after --remap-path-prefix) look like:
+#   =.cargo/registry/src/<hash>/ring-0.17.0/src/lib.rs
+#   =.bloat-src/easytier/src/lib.rs
+# We extract the crate name (e.g. "ring", "easytier") from these paths.
+python3 << 'PYEOF' < "$BLOATY_RAW" > "$BLOATY_REPORT"
+import re, sys
 
-echo "  bloat-report.txt: $(wc -l < "${OUTPUT_DIR}/bloat-report.txt" 2>/dev/null || echo '0') lines"
-echo "  First 3 lines:"
-head -3 "${OUTPUT_DIR}/bloat-report.txt" 2>/dev/null
+def extract_crate_name(path):
+    """Extract crate name from a DWARF compile unit file path."""
+    # Pattern: .../<crate>-<version>/src/...
+    # e.g. .../ring-0.17.0/src/lib.rs  -> ring
+    #       .../serde_json-1.0.0/src/... -> serde_json
+    #       .../easytier-rpc-build-0.1.0/src/... -> easytier-rpc-build
+    m = re.search(r'/([^/]+-\d[^/]*?)/src/', path)
+    if m:
+        name_ver = m.group(1)
+        # Split on last '-' followed by a digit (version separator)
+        parts = re.split(r'-(?=\d)', name_ver, 1)
+        return parts[0] if parts else name_ver
+
+    # Pattern: .../<name>/src/...  (no version, e.g. =.bloat-src/easytier/src/lib.rs)
+    m = re.search(r'/([^/]+)/src/', path)
+    if m:
+        return m.group(1)
+
+    return path
+
+for line in sys.stdin:
+    stripped = line.rstrip('\n')
+    # Find a path-like string containing /src/ and replace it with crate name
+    m = re.search(r'(\S+/src/\S+)', stripped)
+    if m:
+        path = m.group(1)
+        crate_name = extract_crate_name(path)
+        stripped = stripped[:m.start()] + crate_name + stripped[m.end():]
+    print(stripped)
+PYEOF
+
+echo "  bloat-report.txt: $(wc -l < "$BLOATY_REPORT" 2>/dev/null || echo '0') lines"
+echo "  First 5 lines:"
+head -5 "$BLOATY_REPORT" 2>/dev/null
 
 # ===================== Copy binary =====================
 if [[ -f "$BINARY" ]]; then
@@ -225,7 +250,7 @@ else
 fi
 
 echo ""
-echo "  Contents of ${OUTPUT_DIR}/:"
+echo "  Contents of ${OUTPUT_DIR}:"
 ls -lh "$OUTPUT_DIR/"
 
 # ===================== Write GitHub Step Summary =====================
@@ -238,8 +263,8 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     if [[ -f "$BINARY" ]]; then
       echo "| easytier-core | $(ls -lh "$BINARY" | awk '{print $5}') |"
     fi
-    if [[ -f "${OUTPUT_DIR}/bloat-report.txt" ]]; then
-      echo "| bloat-report.txt | $(wc -l < "${OUTPUT_DIR}/bloat-report.txt") lines |"
+    if [[ -f "$BLOATY_REPORT" ]]; then
+      echo "| bloat-report.txt | $(wc -l < "$BLOATY_REPORT") lines |"
     fi
     echo ""
     echo "### Paths"
@@ -248,6 +273,12 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     echo "- CARGO_TARGET_DIR: ${CARGO_TARGET_DIR}"
     echo "- OUTPUT_DIR: ${OUTPUT_DIR}"
     echo "- BINARY: ${BINARY}"
+    echo "- BLOATY_BIN: ${BLOATY_BIN}"
+    echo ""
+    echo "### Bloat Report"
+    echo '```'
+    cat "$BLOATY_REPORT" 2>/dev/null || echo "(empty)"
+    echo '```'
     echo ""
     echo "### File listing"
     echo '```'
