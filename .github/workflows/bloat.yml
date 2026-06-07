@@ -39,8 +39,9 @@ jobs:
       - name: Verify output directory
         run: |
           echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
-          echo "Contents of ${GITHUB_WORKSPACE}/.bloat-output/:"
-          ls -lhR "${GITHUB_WORKSPACE}/.bloat-output/" || echo "  (directory not found or empty)"
+          echo "Contents of ${GITHUB_WORKSPACE}/bloat-output/:"
+          ls -lhR "${GITHUB_WORKSPACE}/bloat-output/" || echo "  (directory not found or empty)"
+          find "${GITHUB_WORKSPACE}/bloat-output/" -type f -exec ls -lh {} \; || echo "  (no files found)"
 
       - name: Read host arch
         id: arch
@@ -51,5 +52,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: easytier-bloat-${{ steps.arch.outputs.value }}
-          path: ${{ github.workspace }}/.bloat-output/
+          path: ${{ github.workspace }}/bloat-output/
           if-no-files-found: error
