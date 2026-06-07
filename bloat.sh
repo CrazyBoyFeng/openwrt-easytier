@@ -162,8 +162,15 @@ export CARGO_TARGET_DIR="${SRC_DIR}/target"
 # Set PROTOC explicitly (same as Makefile CARGO_PKG_VARS)
 export PROTOC="${PROTOC:-$(which protoc 2>/dev/null || echo /usr/bin/protoc)}"
 
-# Remap paths to keep output deterministic
-export RUSTFLAGS="--remap-path-prefix=$(pwd)/="
+# Remap paths to keep output deterministic and readable.
+# cargo install --path remaps $(pwd) -> =, but the cargo registry
+# sources and rustc stdlib are at absolute paths outside $(pwd).
+# Remap them all so bloaty output shows clean, portable crate names.
+# Order matters: longest/most-specific prefixes first.
+export RUSTFLAGS="--remap-path-prefix=$(pwd)/= \
+  --remap-path-prefix=${HOME}/.cargo/=.cargo/ \
+  --remap-path-prefix=${HOME}/.rustup/=.rustup/ \
+  --remap-path-prefix=/rustc/=rustc/"
 
 # Use cargo install --path, identical to the Makefile's Build/Compile.
 # cargo install --path treats the crate as standalone (no workspace
@@ -208,19 +215,29 @@ BLOATY_REPORT="${OUTPUT_DIR}/bloat-report.txt"
   || { echo "ERROR: bloaty failed (exit $?)" >&2; exit 1; }
 
 # Post-process: replace DWARF compile unit file paths with clean crate names.
-# DWARF paths (after --remap-path-prefix) look like:
+# Also filter out debug section lines ([section .debug_*]) which have
+# 0 VM size and are not real code — they are DWARF metadata sections.
+#
+# After --remap-path-prefix, paths look like:
 #   =.cargo/registry/src/<hash>/ring-0.17.0/src/lib.rs
 #   =.bloat-src/easytier/src/lib.rs
-# We extract the crate name (e.g. "ring", "easytier") from these paths.
+#   rustc/<hash>/library/std/src/lib.rs
+# We extract the crate name (e.g. "ring", "easytier", "std") from these.
 python3 -c '
 import re, sys
 
 def extract_crate_name(path):
+    # Pattern: .../<crate>-<version>/src/...
+    # e.g. .../ring-0.17.0/src/lib.rs -> ring
+    #       .../serde_json-1.0.0/src/... -> serde_json
     m = re.search(r"/([^/]+-\d[^/]*?)/src/", path)
     if m:
         name_ver = m.group(1)
         parts = re.split(r"-(?=\d)", name_ver, 1)
         return parts[0] if parts else name_ver
+    # Pattern: .../<name>/src/...  (no version)
+    # e.g. =.cargo/registry/src/<hash>/easytier/src/lib.rs
+    #       rustc/<hash>/library/std/src/lib.rs
     m = re.search(r"/([^/]+)/src/", path)
     if m:
         return m.group(1)
@@ -228,6 +245,10 @@ def extract_crate_name(path):
 
 for line in sys.stdin:
     stripped = line.rstrip("\n")
+    # Skip debug section lines (DWARF metadata, not code)
+    if re.search(r"\[section \.debug_", stripped):
+        continue
+    # Replace file paths with clean crate names
     m = re.search(r"(\S+/src/\S+)", stripped)
     if m:
         path = m.group(1)
