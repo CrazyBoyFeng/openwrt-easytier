@@ -161,21 +161,50 @@ mkdir -p "$OUTPUT_DIR"
 banner "Running cargo-bloat"
 
 # cargo-bloat internally runs cargo build, which discovers the workspace
-# root Cargo.toml and triggers feature unification across all members.
-# Temporarily remove the workspace root Cargo.toml so cargo treats
-# easytier as a standalone crate, matching what cargo install --path does.
-# The binary in $CARGO_TARGET_DIR/release/ from cargo install was compiled
-# in standalone mode; cargo-bloat will reuse it or rebuild the same way.
+# root Cargo.toml and triggers feature unification across all members
+# (resolver v2).  Other workspace members (easytier-web, easytier-gui)
+# enable features like quic, websocket → rustls, which get unified into
+# every member — including easytier-core.  This pollutes the bloat report.
+#
+# Fix: temporarily replace the workspace Cargo.toml with a minimal version
+# that only includes "easytier" as a member.  This keeps workspace.package
+# (edition, rust-version) working so that edition.workspace = true etc.
+# still resolve, but eliminates feature unification from other members.
+# cargo-bloat then compiles with --no-default-features --features $LITE_FEATURES
+# (same as the Makefile's Build/Compile for the lite variant).
 WS_CARGO_TOML="$SRC_DIR/Cargo.toml"
 if [[ -f "$WS_CARGO_TOML" ]]; then
-  mv "$WS_CARGO_TOML" "$WS_CARGO_TOML.bak"
+  cp "$WS_CARGO_TOML" "$WS_CARGO_TOML.bak"
+  cat > "$WS_CARGO_TOML" <<'WS_EOF'
+[workspace]
+resolver = "2"
+members = ["easytier"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.95"
+
+[profile.dev]
+panic = "unwind"
+debug = 2
+
+[profile.release]
+panic = "abort"
+lto = true
+codegen-units = 1
+opt-level = 3
+strip = true
+WS_EOF
 fi
 (
   cd "$SRC_DIR/easytier"
-  echo "  Analyzing binary (standalone, no workspace)"
+  echo "  Analyzing binary (easytier-only workspace, no cross-member unification)"
+  echo "  Features: --no-default-features --features ${LITE_FEATURES}"
   cargo bloat --release \
     --bin easytier-core \
     --crates \
+    --no-default-features \
+    --features "$LITE_FEATURES" \
     > "${OUTPUT_DIR}/bloat-report.txt" 2>&1 \
     || true
 )
