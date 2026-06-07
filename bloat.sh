@@ -212,39 +212,29 @@ BLOATY_REPORT="${OUTPUT_DIR}/bloat-report.txt"
 #   =.cargo/registry/src/<hash>/ring-0.17.0/src/lib.rs
 #   =.bloat-src/easytier/src/lib.rs
 # We extract the crate name (e.g. "ring", "easytier") from these paths.
-python3 << 'PYEOF' < "$BLOATY_RAW" > "$BLOATY_REPORT"
+python3 -c '
 import re, sys
 
 def extract_crate_name(path):
-    """Extract crate name from a DWARF compile unit file path."""
-    # Pattern: .../<crate>-<version>/src/...
-    # e.g. .../ring-0.17.0/src/lib.rs  -> ring
-    #       .../serde_json-1.0.0/src/... -> serde_json
-    #       .../easytier-rpc-build-0.1.0/src/... -> easytier-rpc-build
-    m = re.search(r'/([^/]+-\d[^/]*?)/src/', path)
+    m = re.search(r"/([^/]+-\d[^/]*?)/src/", path)
     if m:
         name_ver = m.group(1)
-        # Split on last '-' followed by a digit (version separator)
-        parts = re.split(r'-(?=\d)', name_ver, 1)
+        parts = re.split(r"-(?=\d)", name_ver, 1)
         return parts[0] if parts else name_ver
-
-    # Pattern: .../<name>/src/...  (no version, e.g. =.bloat-src/easytier/src/lib.rs)
-    m = re.search(r'/([^/]+)/src/', path)
+    m = re.search(r"/([^/]+)/src/", path)
     if m:
         return m.group(1)
-
     return path
 
 for line in sys.stdin:
-    stripped = line.rstrip('\n')
-    # Find a path-like string containing /src/ and replace it with crate name
-    m = re.search(r'(\S+/src/\S+)', stripped)
+    stripped = line.rstrip("\n")
+    m = re.search(r"(\S+/src/\S+)", stripped)
     if m:
         path = m.group(1)
         crate_name = extract_crate_name(path)
         stripped = stripped[:m.start()] + crate_name + stripped[m.end():]
     print(stripped)
-PYEOF
+' < "$BLOATY_RAW" > "$BLOATY_REPORT"
 
 echo "  bloat-report.txt: $(wc -l < "$BLOATY_REPORT" 2>/dev/null || echo '0') lines"
 echo "  First 5 lines:"
