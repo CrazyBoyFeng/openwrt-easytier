@@ -261,6 +261,40 @@ echo "  bloat-report.txt: $(wc -l < "$BLOATY_REPORT" 2>/dev/null || echo '0') li
 echo "  First 5 lines:"
 head -5 "$BLOATY_REPORT" 2>/dev/null
 
+# ===================== Dependency audit =====================
+# Extract all compile unit names from DWARF and check for unexpected deps.
+# This catches anything hiding in bloaty's "[N Others]" aggregation.
+BLOAT_AUDIT="${OUTPUT_DIR}/dependency-audit.txt"
+echo ""
+echo "  Running dependency audit..."
+
+# readelf --debug-dump=info lists all DW_TAG_compile_unit entries.
+# DW_AT_producer lines contain the crate name, e.g.:
+#   "rustc 1.95.0 --crate-name ring ..."
+# We extract the crate names and produce a sorted list with counts.
+readelf --debug-dump=info "$BINARY" 2>/dev/null \
+  | rg 'DW_AT_producer.*rustc.*--crate-name (\S+)' -o --no-line-number \
+  | rg -o '(?<=--crate-name )\S+' \
+  | sort | uniq -c | sort -rn \
+  > "$BLOAT_AUDIT" 2>/dev/null \
+  || { echo "  WARNING: readelf audit failed, skipping"; touch "$BLOAT_AUDIT"; }
+
+# Check for dependencies that should NOT be present in the lite build.
+# These come from workspace features (quic, websocket, wireguard) that
+# are intentionally excluded from the lite variant.
+UNWANTED="quinn|rustls|boringtun|rcgen|tokio-rustls|tokio-websockets"
+UNWANTED_MATCHES=$(rg -c "$UNWANTED" "$BLOAT_AUDIT" 2>/dev/null || echo "0")
+TOTAL_CRATES=$(wc -l < "$BLOAT_AUDIT" 2>/dev/null || echo "0")
+echo "  Total compile units: ${TOTAL_CRATES}"
+if [[ "$UNWANTED_MATCHES" -gt 0 ]]; then
+  echo "  WARNING: found unwanted dependencies in binary!"
+  rg "$UNWANTED" "$BLOAT_AUDIT" 2>/dev/null
+  rg "$UNWANTED" "$BLOAT_AUDIT" 2>/dev/null >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+else
+  echo "  No unwanted dependencies (quinn/rustls/boringtun/rcgen) found"
+fi
+echo "  dependency-audit.txt: ${TOTAL_CRATES} compile units"
+
 # ===================== Copy binary =====================
 if [[ -f "$BINARY" ]]; then
   cp "$BINARY" "${OUTPUT_DIR}/easytier-core"
@@ -299,6 +333,22 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     echo '```'
     cat "$BLOATY_REPORT" 2>/dev/null || echo "(empty)"
     echo '```'
+    echo ""
+    echo "### Dependency Audit"
+    echo "Total compile units: ${TOTAL_CRATES}"
+    if [[ "$UNWANTED_MATCHES" -gt 0 ]]; then
+      echo "**WARNING: found unwanted dependencies!**"
+    else
+      echo "No unwanted dependencies (quinn/rustls/boringtun/rcgen) found"
+    fi
+    echo ""
+    echo "<details><summary>Full compile unit list</summary>"
+    echo ""
+    echo '```'
+    cat "$BLOAT_AUDIT" 2>/dev/null || echo "(empty)"
+    echo '```'
+    echo ""
+    echo "</details>"
     echo ""
     echo "### File listing"
     echo '```'
