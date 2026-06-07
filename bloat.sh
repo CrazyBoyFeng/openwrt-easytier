@@ -9,7 +9,7 @@
 # produce any packages.  It builds directly with cargo on the host.
 #
 # Key differences from the production build:
-#   - LTO=off   : preserves per-crate compile unit boundaries for accurate attribution
+#   - LTO=fat   : matches release build for realistic code sizes
 #   - strip=false: keeps symbol table + debug sections (required by bloaty)
 #   - debug=true : emits DWARF debug info (required by bloaty)
 #
@@ -23,6 +23,7 @@
 #
 # Output:
 #   bloat-output/bloat-report.txt  — per-crate text breakdown
+#   bloat-output/inclusive-size-report.txt — per-crate recursive VM size
 #   bloat-output/easytier-core     — the unstripped ELF binary
 
 set -euo pipefail
@@ -143,12 +144,12 @@ echo "  OUTPUT_DIR: ${OUTPUT_DIR}"
 echo "  pwd:        $(pwd)"
 echo "  Target:     ${HOST_TARGET}"
 echo "  Features:   ${LITE_FEATURES}"
-echo "  LTO: off (preserves per-crate attribution)"
+echo "  LTO: fat (matches release)"
 echo "  Strip: false (required by bloaty)"
 echo "  Debug: true (required by bloaty)"
 echo ""
 
-export CARGO_PROFILE_RELEASE_LTO=off
+export CARGO_PROFILE_RELEASE_LTO=fat
 export CARGO_PROFILE_RELEASE_STRIP=false
 export CARGO_PROFILE_RELEASE_DEBUG=true
 export CARGO_PROFILE_RELEASE_OPT_LEVEL=z
@@ -388,26 +389,11 @@ PYSCRIPT
   head -5 "$INCLUSIVE_REPORT" 2>/dev/null
 fi
 
-# ===================== Copy binary + strip for release size =====================
+# ===================== Copy binary =====================
 if [[ -f "$BINARY" ]]; then
   cp "$BINARY" "${OUTPUT_DIR}/easytier-core"
   echo "  Binary copied to ${OUTPUT_DIR}/easytier-core"
-
-  # Strip a copy to show the actual release (non-debug) disk size.
-  # strip removes: .symtab, .strtab, .debug_* — all non-load metadata.
-  # The remaining LOAD segments (.text, .rodata, .data, .bss) are what
-  # ends up in the real release binary.
-  STRIPPED="${OUTPUT_DIR}/easytier-core-stripped"
-  cp "$BINARY" "$STRIPPED"
-  strip "$STRIPPED"
-  UNSTRIPPED_SIZE=$(stat --format=%s "$BINARY")
-  STRIPPED_SIZE=$(stat --format=%s "$STRIPPED")
-  DEBUG_OVERHEAD=$((UNSTRIPPED_SIZE - STRIPPED_SIZE))
-  echo ""
-  echo "  Release size estimate:"
-  echo "    Unstripped: $(numfmt --to=iec $UNSTRIPPED_SIZE) (${UNSTRIPPED_SIZE} bytes)"
-  echo "    Stripped:   $(numfmt --to=iec $STRIPPED_SIZE) (${STRIPPED_SIZE} bytes)"
-  echo "    Overhead:   $(numfmt --to=iec $DEBUG_OVERHEAD) (debug + symbol tables)"
+  echo "  Binary size: $(ls -lh "$BINARY" | awk '{print $5}')"
 else
   echo "  WARNING: skipping binary copy, file not found at ${BINARY}"
 fi
@@ -421,28 +407,22 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
   {
     echo "## Bloat Analysis Results"
     echo ""
-    echo "| Build | Size |"
-    echo "|-------|------|"
+    echo "| File | Size |"
+    echo "|------|------|"
     if [[ -f "$BINARY" ]]; then
-      UNSTRIPPED_SIZE=$(stat --format=%s "$BINARY")
-      echo "| Unstripped (debug) | $(numfmt --to=iec $UNSTRIPPED_SIZE) |"
-    fi
-    if [[ -f "${OUTPUT_DIR}/easytier-core-stripped" ]]; then
-      STRIPPED_SIZE=$(stat --format=%s "${OUTPUT_DIR}/easytier-core-stripped")
-      echo "| **Stripped (release)** | **$(numfmt --to=iec $STRIPPED_SIZE)** |"
+      echo "| easytier-core | $(ls -lh "$BINARY" | awk '{print $5}') |"
     fi
     if [[ -f "$BLOATY_REPORT" ]]; then
       echo "| bloat-report.txt | $(wc -l < "$BLOATY_REPORT") lines |"
     fi
     echo ""
-    echo "> **Note**: The bloat report below uses **VM Size** (virtual memory footprint),"
-    echo "> which is unaffected by debug info. The File Size column includes debug"
-    echo "> symbol overhead; use the Stripped row above for the actual release disk size."
+    echo "> **Note**: VM Size reflects actual memory footprint per crate and is"
+    echo "> unaffected by debug info. File Size includes debug symbol overhead."
     echo ""
     echo "### Build Configuration"
     echo "- Version: ${VERSION}"
     echo "- Features: ${LITE_FEATURES}"
-    echo "- LTO: off (preserves per-crate attribution)"
+    echo "- LTO: fat (matches release build)"
     echo "- Strip: false (debug build for bloaty analysis)"
     echo "- Opt level: z"
     echo ""
