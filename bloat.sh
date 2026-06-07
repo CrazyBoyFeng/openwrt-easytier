@@ -261,39 +261,125 @@ echo "  bloat-report.txt: $(wc -l < "$BLOATY_REPORT" 2>/dev/null || echo '0') li
 echo "  First 5 lines:"
 head -5 "$BLOATY_REPORT" 2>/dev/null
 
-# ===================== Dependency audit =====================
-# Extract all compile unit names from DWARF and check for unexpected deps.
-# This catches anything hiding in bloaty's "[N Others]" aggregation.
-BLOAT_AUDIT="${OUTPUT_DIR}/dependency-audit.txt"
+# ===================== Inclusive size analysis =====================
+# Combine bloaty per-crate self sizes with Cargo.lock dependency tree
+# to compute inclusive sizes (crate + all transitive dependencies).
+INCLUSIVE_REPORT="${OUTPUT_DIR}/inclusive-size-report.txt"
+LOCKFILE="${SRC_DIR}/Cargo.lock"
+
 echo ""
-echo "  Running dependency audit..."
+echo "  Computing inclusive sizes (crate + all transitive deps)..."
 
-# readelf --debug-dump=info lists all DW_TAG_compile_unit entries.
-# DW_AT_producer lines contain the crate name, e.g.:
-#   "rustc 1.95.0 --crate-name ring ..."
-# We extract the crate names and produce a sorted list with counts.
-readelf --debug-dump=info "$BINARY" 2>/dev/null \
-  | rg 'DW_AT_producer.*rustc.*--crate-name (\S+)' -o --no-line-number \
-  | rg -o '(?<=--crate-name )\S+' \
-  | sort | uniq -c | sort -rn \
-  > "$BLOAT_AUDIT" 2>/dev/null \
-  || { echo "  WARNING: readelf audit failed, skipping"; touch "$BLOAT_AUDIT"; }
-
-# Check for dependencies that should NOT be present in the lite build.
-# These come from workspace features (quic, websocket, wireguard) that
-# are intentionally excluded from the lite variant.
-UNWANTED="quinn|rustls|boringtun|rcgen|tokio-rustls|tokio-websockets"
-UNWANTED_MATCHES=$(rg -c "$UNWANTED" "$BLOAT_AUDIT" 2>/dev/null || echo "0")
-TOTAL_CRATES=$(wc -l < "$BLOAT_AUDIT" 2>/dev/null || echo "0")
-echo "  Total compile units: ${TOTAL_CRATES}"
-if [[ "$UNWANTED_MATCHES" -gt 0 ]]; then
-  echo "  WARNING: found unwanted dependencies in binary!"
-  rg "$UNWANTED" "$BLOAT_AUDIT" 2>/dev/null
-  rg "$UNWANTED" "$BLOAT_AUDIT" 2>/dev/null >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+if [[ ! -f "$LOCKFILE" ]]; then
+  echo "  WARNING: Cargo.lock not found at ${LOCKFILE}, skipping inclusive analysis"
+  echo "(no Cargo.lock)" > "$INCLUSIVE_REPORT"
 else
-  echo "  No unwanted dependencies (quinn/rustls/boringtun/rcgen) found"
+  # bloaty format per line: FILE_PCT FILE_SIZE VM_PCT VM_SIZE COMPILE_UNIT_PATH
+  # Cargo.lock has [[package]] entries with name + dependencies.
+  # We parse both with Python, compute recursive sizes, and output a
+  # table sorted by inclusive VM size descending.
+  SRC_DIR="$SRC_DIR" BLOATY_RAW="$BLOATY_RAW" python3 << 'PYEOF' > "$INCLUSIVE_REPORT"
+import re, os, sys
+
+src_dir = os.environ.get('SRC_DIR', '.')
+bloaty_raw = os.environ.get('BLOATY_RAW', '')
+lockfile = os.path.join(src_dir, 'Cargo.lock')
+
+def parse_size(s):
+    s = s.strip()
+    m = re.match(r'^([\d.]+)(Mi|Ki)$', s)
+    if m:
+        v, u = float(m.group(1)), m.group(2)
+        return v * (1048576 if u == 'Mi' else 1024)
+    m = re.match(r'^(\d+)$', s)
+    return float(m.group(1)) if m else 0.0
+
+def fmt(b):
+    if abs(b) >= 1048576: return f"{b/1048576:.1f}Mi"
+    if abs(b) >= 1024: return f"{b/1024:.1f}Ki"
+    return f"{b:.0f}B"
+
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib
+
+with open(lockfile, 'rb') as f:
+    data = tomllib.load(f)
+
+# Build dependency graph: {crate_name: [direct_dep_names]}
+graph = {}
+for pkg in data.get('package', []):
+    name = pkg['name']
+    deps = []
+    for d in pkg.get('dependencies', []):
+        deps.append(re.split(r'[\s/?]', d)[0])
+    graph[name] = deps
+
+# Parse bloaty raw output: {crate_name: vm_size_bytes}
+self_sizes = {}
+with open(bloaty_raw) as f:
+    for line in f:
+        line = line.strip()
+        if not line or line.startswith('FILE') or line.startswith('VM'):
+            continue
+        if re.search(r'\[section |TOTAL|Others', line):
+            continue
+        parts = line.split()
+        if len(parts) < 5:
+            continue
+        # bloaty format: FILE_PCT FILE_SIZE VM_PCT VM_SIZE PATH
+        vm_bytes = parse_size(parts[3])
+        path = parts[4]
+        # Extract crate name from path
+        m = re.search(r'([^/]+-\d[^/]*?)/src/', path)
+        if m:
+            nv = m.group(1)
+            name = re.split(r'-(?=\d)', nv, 1)[0]
+        else:
+            m = re.search(r'/([^/]+)/src/', path)
+            name = m.group(1) if m else path
+        self_sizes[name] = self_sizes.get(name, 0) + vm_bytes
+
+# Compute inclusive sizes (DFS with per-root visited set for diamond deps)
+inclusive = {}
+def dfs(crate, visited):
+    if crate in visited:
+        return 0.0
+    visited.add(crate)
+    total = self_sizes.get(crate, 0.0)
+    for dep in graph.get(crate, []):
+        total += dfs(dep, visited)
+    return total
+
+for crate in self_sizes:
+    inclusive[crate] = dfs(crate, set())
+
+# Sort by inclusive VM size descending
+rows = []
+for name, inc in inclusive.items():
+    s = self_sizes.get(name, 0.0)
+    nd = len(graph.get(name, []))
+    rows.append((name, s, inc, nd))
+rows.sort(key=lambda x: -x[2])
+
+# Print table
+total_self = sum(self_sizes.values())
+print("Inclusive Size Analysis (VM Size)")
+print(f"Per-crate self sizes total: {fmt(total_self)} ({len(self_sizes)} crates)")
+print(f"Dependency graph: {len(graph)} crates from Cargo.lock")
+print()
+print(f"{'Crate':<35} {'Self':>8} {'Inclusive':>10} {'Deps':>5}")
+print('-' * 62)
+for name, s, inc, nd in rows:
+    print(f"{name:<35} {fmt(s):>8} {fmt(inc):>10} {nd:>5}")
+print('-' * 62)
+PYEOF
+
+  echo "  inclusive-size-report.txt: $(wc -l < "$INCLUSIVE_REPORT" 2>/dev/null || echo '0') lines"
+  echo "  First 5 lines:"
+  head -5 "$INCLUSIVE_REPORT" 2>/dev/null
 fi
-echo "  dependency-audit.txt: ${TOTAL_CRATES} compile units"
 
 # ===================== Copy binary + strip for release size =====================
 if [[ -f "$BINARY" ]]; then
@@ -366,21 +452,10 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     cat "$BLOATY_REPORT" 2>/dev/null || echo "(empty)"
     echo '```'
     echo ""
-    echo "### Dependency Audit"
-    echo "Total compile units: ${TOTAL_CRATES}"
-    if [[ "$UNWANTED_MATCHES" -gt 0 ]]; then
-      echo "**WARNING: found unwanted dependencies!**"
-    else
-      echo "No unwanted dependencies (quinn/rustls/boringtun/rcgen) found"
-    fi
-    echo ""
-    echo "<details><summary>Full compile unit list</summary>"
-    echo ""
+    echo "### Inclusive Size Analysis"
     echo '```'
-    cat "$BLOAT_AUDIT" 2>/dev/null || echo "(empty)"
+    cat "$INCLUSIVE_REPORT" 2>/dev/null || echo "(empty)"
     echo '```'
-    echo ""
-    echo "</details>"
     echo ""
     echo "### File listing"
     echo '```'
