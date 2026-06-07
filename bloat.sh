@@ -136,6 +136,12 @@ export PROTOC="${PROTOC:-$(which protoc 2>/dev/null || echo /usr/bin/protoc)}"
 # Remap paths to keep output deterministic
 export RUSTFLAGS="--remap-path-prefix=$(pwd)/="
 
+# Dump dependency tree for diagnostics (helps identify unwanted crates)
+echo "  Dependency tree (inverted, top-level deps only):"
+cargo tree --package easytier --no-default-features --features "$LITE_FEATURES" \
+  --invert --edges features --depth 1 2>&1 | head -30 || true
+echo ""
+
 # Build from workspace root.  --package easytier selects the member.
 cargo build --release \
   --package easytier \
