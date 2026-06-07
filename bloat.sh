@@ -78,7 +78,8 @@ if [[ ! -x "$BLOATY_BIN" ]]; then
   git -C "$BLOATY_SRC" checkout "tags/${BLOATY_VERSION}"
   git -C "$BLOATY_SRC" submodule update --init --recursive
   cmake -B "$BLOATY_SRC/build" -G Ninja -S "$BLOATY_SRC" \
-    -DCMAKE_INSTALL_PREFIX="$BLOATY_INSTALL_PREFIX"
+    -DCMAKE_INSTALL_PREFIX="$BLOATY_INSTALL_PREFIX" \
+    -DBLOATY_BUILD_FUZZER=OFF
   cmake --build "$BLOATY_SRC/build"
   cmake --build "$BLOATY_SRC/build" --target install
   if [[ ! -x "$BLOATY_BIN" ]]; then
