@@ -160,13 +160,16 @@ fi
 mkdir -p "$OUTPUT_DIR"
 banner "Running cargo-bloat"
 
-echo "  Running cargo bloat..."
-cargo bloat --release \
-  --package easytier \
-  --bin easytier-core \
-  --crates \
-  > "${OUTPUT_DIR}/bloat-report.txt" 2>&1 \
-  || true
+if [[ -f "$BINARY" ]]; then
+  echo "  Analyzing binary: ${BINARY}"
+  cargo bloat --crates \
+    --bin "$BINARY" \
+    > "${OUTPUT_DIR}/bloat-report.txt" 2>&1 \
+    || true
+else
+  echo "  WARNING: binary not found, skipping bloat analysis"
+  touch "${OUTPUT_DIR}/bloat-report.txt"
+fi
 
 echo "  bloat-report.txt: $(wc -l < "${OUTPUT_DIR}/bloat-report.txt" 2>/dev/null || echo '0') lines"
 echo "  First 3 lines:"
