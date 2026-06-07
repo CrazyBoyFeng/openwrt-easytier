@@ -9,9 +9,9 @@
 # produce any packages.  It builds directly with cargo on the host.
 #
 # Key differences from the production build:
-#   - LTO=off   : preserves DWARF compile-unit -> crate attribution
-#   - strip=false: keeps symbol table + debug sections
-#   - debug=true : emits DWARF debug info
+#   - LTO=fat   : matches release build, inlined code attributed to caller
+#   - strip=false: keeps symbol table + debug sections (required by bloaty)
+#   - debug=true : emits DWARF debug info (required by bloaty)
 #
 # Analysis uses bloaty (Google's binary size profiler) which reads DWARF
 # debug info directly from the ELF binary — no cargo project context needed.
@@ -143,12 +143,12 @@ echo "  OUTPUT_DIR: ${OUTPUT_DIR}"
 echo "  pwd:        $(pwd)"
 echo "  Target:     ${HOST_TARGET}"
 echo "  Features:   ${LITE_FEATURES}"
-echo "  LTO: off"
-echo "  Strip: false"
-echo "  Debug: true"
+echo "  LTO: fat (matches release)"
+echo "  Strip: false (required by bloaty)"
+echo "  Debug: true (required by bloaty)"
 echo ""
 
-export CARGO_PROFILE_RELEASE_LTO=off
+export CARGO_PROFILE_RELEASE_LTO=fat
 export CARGO_PROFILE_RELEASE_STRIP=false
 export CARGO_PROFILE_RELEASE_DEBUG=true
 export CARGO_PROFILE_RELEASE_OPT_LEVEL=z
@@ -176,6 +176,10 @@ export RUSTFLAGS="--remap-path-prefix=$(pwd)/= \
 # cargo install --path treats the crate as standalone (no workspace
 # feature unification), unlike cargo build which always discovers
 # the workspace root and unifies features across all members.
+#
+# With LTO=fat, code inlined from dependencies (e.g. ring -> snow)
+# is attributed to the caller's compile unit by bloaty, giving a
+# more accurate picture of per-crate total contribution.
 cargo install --path "$SRC_DIR/easytier" \
   --locked \
   --bin easytier-core \
@@ -435,7 +439,7 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     echo "### Build Configuration"
     echo "- Version: ${VERSION}"
     echo "- Features: ${LITE_FEATURES}"
-    echo "- LTO: off (preserves per-crate attribution)"
+    echo "- LTO: fat (matches release build)"
     echo "- Strip: false (debug build for bloaty analysis)"
     echo "- Opt level: z"
     echo ""
