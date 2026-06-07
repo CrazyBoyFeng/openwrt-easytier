@@ -100,11 +100,9 @@ if [[ -d "$PATCHES_DIR" ]]; then
   done
 fi
 
-# Remove upstream Cargo.lock so cargo resolves dependencies fresh based
-# on the patched Cargo.toml and the selected features only.
-# The upstream lockfile was generated with all default features (wireguard,
-# quic, websocket, ...) which would pull in unnecessary crates.
-rm -f "$SRC_DIR/Cargo.lock"
+# Keep Cargo.lock and use --locked, same as the Makefile.
+# Without --locked, cargo resolves the latest versions from crates.io,
+# which can break and produces non-deterministic results.
 
 # ===================== Build =====================
 banner "Building easytier-core (lite) for bloat analysis"
@@ -136,19 +134,19 @@ export PROTOC="${PROTOC:-$(which protoc 2>/dev/null || echo /usr/bin/protoc)}"
 # Remap paths to keep output deterministic
 export RUSTFLAGS="--remap-path-prefix=$(pwd)/="
 
-# Build with --manifest-path pointing to easytier/Cargo.toml, treating
-# easytier/ as a standalone crate outside the workspace.  This avoids
-# feature unification from other workspace members (e.g. easytier-web's
-# reqwest rustls-tls pulling in ring/rustls/quinn unnecessarily).
-# This matches the Makefile's approach: cargo install --path easytier --locked.
-cargo build --release \
-  --manifest-path "$SRC_DIR/easytier/Cargo.toml" \
+# Use cargo install --path, identical to the Makefile's Build/Compile.
+# cargo install --path treats the crate as standalone (no workspace
+# feature unification), unlike cargo build which always discovers
+# the workspace root and unifies features across all members.
+cargo install --path "$SRC_DIR/easytier" \
+  --locked \
   --bin easytier-core \
   --no-default-features \
   --features "$LITE_FEATURES" \
-  || { echo "ERROR: cargo build failed (exit $?)" >&2; exit 1; }
+  --root "$SRC_DIR/install" \
+  || { echo "ERROR: cargo install failed (exit $?)" >&2; exit 1; }
 
-BINARY="${CARGO_TARGET_DIR}/release/easytier-core"
+BINARY="$SRC_DIR/install/bin/easytier-core"
 echo ""
 if [[ -f "$BINARY" ]]; then
   echo "  Binary: $(ls -lh "$BINARY" | awk '{print $5, $NF}')"
@@ -158,15 +156,8 @@ else
   find "${CARGO_TARGET_DIR}" -name 'easytier-core' -type f 2>/dev/null || echo "    (not found)"
 fi
 
-# ===================== Dependency tree diagnostics =====================
-mkdir -p "$OUTPUT_DIR"
-echo ""
-echo "  --- Full dep tree (top-level features only) ---"
-cargo tree --package easytier --no-default-features --features "$LITE_FEATURES" \
-  --edges features --depth 1 > "${OUTPUT_DIR}/dep-tree.txt" 2>&1 || true
-echo ""
-
 # ===================== Bloat analysis =====================
+mkdir -p "$OUTPUT_DIR"
 banner "Running cargo-bloat"
 
 echo "  Running cargo bloat..."
