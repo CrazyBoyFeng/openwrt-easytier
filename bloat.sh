@@ -155,32 +155,31 @@ else
 fi
 
 # ===================== Dependency tree diagnostics =====================
+mkdir -p "$OUTPUT_DIR"
 echo ""
 echo "  --- What pulls in ring? ---"
 cargo tree --package easytier --no-default-features --features "$LITE_FEATURES" \
-  --invert ring 2>&1 | head -20 || true
+  --invert ring > "${OUTPUT_DIR}/dep-ring.txt" 2>&1 || true
 echo ""
 echo "  --- What pulls in rustls? ---"
 cargo tree --package easytier --no-default-features --features "$LITE_FEATURES" \
-  --invert rustls 2>&1 | head -20 || true
+  --invert rustls > "${OUTPUT_DIR}/dep-rustls.txt" 2>&1 || true
 echo ""
 echo "  --- What pulls in quinn? ---"
 cargo tree --package easytier --no-default-features --features "$LITE_FEATURES" \
-  --invert quinn 2>&1 | head -20 || true
+  --invert quinn > "${OUTPUT_DIR}/dep-quinn.txt" 2>&1 || true
 echo ""
-echo "  --- What pulls in boringtun-easytier? ---"
+echo "  --- What pulls in boringtun? ---"
 cargo tree --package easytier --no-default-features --features "$LITE_FEATURES" \
-  --invert boringtun-easytier 2>&1 | head -20 || true
+  --invert boringtun-easytier > "${OUTPUT_DIR}/dep-boringtun.txt" 2>&1 || true
 echo ""
-echo "  --- What pulls in http_req? ---"
+echo "  --- Full dep tree (top-level features only) ---"
 cargo tree --package easytier --no-default-features --features "$LITE_FEATURES" \
-  --invert http_req 2>&1 | head -20 || true
+  --edges features --depth 1 > "${OUTPUT_DIR}/dep-tree.txt" 2>&1 || true
 echo ""
 
 # ===================== Bloat analysis =====================
 banner "Running cargo-bloat"
-
-mkdir -p "$OUTPUT_DIR"
 
 echo "  Running cargo bloat..."
 cargo bloat --release \
