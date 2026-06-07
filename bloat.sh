@@ -136,9 +136,13 @@ export PROTOC="${PROTOC:-$(which protoc 2>/dev/null || echo /usr/bin/protoc)}"
 # Remap paths to keep output deterministic
 export RUSTFLAGS="--remap-path-prefix=$(pwd)/="
 
-# Build from workspace root.  --package easytier selects the member.
+# Build with --manifest-path pointing to easytier/Cargo.toml, treating
+# easytier/ as a standalone crate outside the workspace.  This avoids
+# feature unification from other workspace members (e.g. easytier-web's
+# reqwest rustls-tls pulling in ring/rustls/quinn unnecessarily).
+# This matches the Makefile's approach: cargo install --path easytier --locked.
 cargo build --release \
-  --package easytier \
+  --manifest-path "$SRC_DIR/easytier/Cargo.toml" \
   --bin easytier-core \
   --no-default-features \
   --features "$LITE_FEATURES" \
@@ -156,22 +160,6 @@ fi
 
 # ===================== Dependency tree diagnostics =====================
 mkdir -p "$OUTPUT_DIR"
-echo ""
-echo "  --- What pulls in ring? ---"
-cargo tree --package easytier --no-default-features --features "$LITE_FEATURES" \
-  --invert ring > "${OUTPUT_DIR}/dep-ring.txt" 2>&1 || true
-echo ""
-echo "  --- What pulls in rustls? ---"
-cargo tree --package easytier --no-default-features --features "$LITE_FEATURES" \
-  --invert rustls > "${OUTPUT_DIR}/dep-rustls.txt" 2>&1 || true
-echo ""
-echo "  --- What pulls in quinn? ---"
-cargo tree --package easytier --no-default-features --features "$LITE_FEATURES" \
-  --invert quinn > "${OUTPUT_DIR}/dep-quinn.txt" 2>&1 || true
-echo ""
-echo "  --- What pulls in boringtun? ---"
-cargo tree --package easytier --no-default-features --features "$LITE_FEATURES" \
-  --invert boringtun-easytier > "${OUTPUT_DIR}/dep-boringtun.txt" 2>&1 || true
 echo ""
 echo "  --- Full dep tree (top-level features only) ---"
 cargo tree --package easytier --no-default-features --features "$LITE_FEATURES" \
