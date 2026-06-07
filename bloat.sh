@@ -100,6 +100,12 @@ if [[ -d "$PATCHES_DIR" ]]; then
   done
 fi
 
+# Remove upstream Cargo.lock so cargo resolves dependencies fresh based
+# on the patched Cargo.toml and the selected features only.
+# The upstream lockfile was generated with all default features (wireguard,
+# quic, websocket, ...) which would pull in unnecessary crates.
+rm -f "$SRC_DIR/Cargo.lock"
+
 # ===================== Build =====================
 banner "Building easytier-core (lite) for bloat analysis"
 echo "  WORKSPACE:  ${WORKSPACE}"
@@ -130,16 +136,16 @@ export PROTOC="${PROTOC:-$(which protoc 2>/dev/null || echo /usr/bin/protoc)}"
 # Remap paths to keep output deterministic
 export RUSTFLAGS="--remap-path-prefix=$(pwd)/="
 
-# Build with --path pointing to easytier/ subdirectory, same as
-# the Makefile's Build/Compile/Cargo (cargo install --path).  This treats
-# easytier/ as a standalone crate outside the workspace, avoiding
-# irrelevant workspace members and stale lockfile entries.
+# Build with --manifest-path pointing to easytier/Cargo.toml, treating
+# easytier/ as a standalone crate outside the workspace.  This avoids
+# feature unification from other workspace members (e.g. easytier-web's
+# reqwest rustls-tls pulling in ring/rustls/quinn unnecessarily).
+# This matches the Makefile's approach: cargo install --path easytier --locked.
 cargo build --release \
-  --path "$SRC_DIR/easytier" \
+  --manifest-path "$SRC_DIR/easytier/Cargo.toml" \
   --bin easytier-core \
   --no-default-features \
   --features "$LITE_FEATURES" \
-  --locked \
   || { echo "ERROR: cargo build failed (exit $?)" >&2; exit 1; }
 
 BINARY="${CARGO_TARGET_DIR}/release/easytier-core"
@@ -154,8 +160,6 @@ fi
 
 # ===================== Bloat analysis =====================
 banner "Running cargo-bloat"
-
-mkdir -p "$OUTPUT_DIR"
 
 echo "  Running cargo bloat..."
 cargo bloat --release \
@@ -196,16 +200,16 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     fi
     echo ""
     echo "### Paths"
-    echo "- WORKSPACE: \${WORKSPACE}"
-    echo "- SRC_DIR: \${SRC_DIR}"
-    echo "- CARGO_TARGET_DIR: \${CARGO_TARGET_DIR}"
-    echo "- OUTPUT_DIR: \${OUTPUT_DIR}"
-    echo "- BINARY: \${BINARY}"
+    echo "- WORKSPACE: ${WORKSPACE}"
+    echo "- SRC_DIR: ${SRC_DIR}"
+    echo "- CARGO_TARGET_DIR: ${CARGO_TARGET_DIR}"
+    echo "- OUTPUT_DIR: ${OUTPUT_DIR}"
+    echo "- BINARY: ${BINARY}"
     echo ""
     echo "### File listing"
-    echo '\`\`\`'
+    echo '```'
     ls -lhR "$OUTPUT_DIR/" 2>&1 || echo "(empty or missing)"
-    echo '\`\`\`'
+    echo '```'
   } >> "$GITHUB_STEP_SUMMARY"
 fi
 
