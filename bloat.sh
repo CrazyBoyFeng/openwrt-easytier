@@ -160,16 +160,20 @@ fi
 mkdir -p "$OUTPUT_DIR"
 banner "Running cargo-bloat"
 
-if [[ -f "$BINARY" ]]; then
-  echo "  Analyzing binary: ${BINARY}"
-  cargo bloat --crates \
-    --bin "$BINARY" \
+# cargo-bloat needs to find the binary via cargo metadata, so we run it
+# from $SRC_DIR/easytier with CARGO_TARGET_DIR pointing to the target dir
+# that cargo install used.  We specify --bin easytier-core and --crates.
+# cargo-bloat only parses DWARF debug info from the existing binary;
+# it does NOT recompile.
+(
+  cd "$SRC_DIR/easytier"
+  echo "  Analyzing binary from target dir: ${CARGO_TARGET_DIR}"
+  cargo bloat --release \
+    --bin easytier-core \
+    --crates \
     > "${OUTPUT_DIR}/bloat-report.txt" 2>&1 \
     || true
-else
-  echo "  WARNING: binary not found, skipping bloat analysis"
-  touch "${OUTPUT_DIR}/bloat-report.txt"
-fi
+)
 
 echo "  bloat-report.txt: $(wc -l < "${OUTPUT_DIR}/bloat-report.txt" 2>/dev/null || echo '0') lines"
 echo "  First 3 lines:"
