@@ -295,10 +295,26 @@ else
 fi
 echo "  dependency-audit.txt: ${TOTAL_CRATES} compile units"
 
-# ===================== Copy binary =====================
+# ===================== Copy binary + strip for release size =====================
 if [[ -f "$BINARY" ]]; then
   cp "$BINARY" "${OUTPUT_DIR}/easytier-core"
   echo "  Binary copied to ${OUTPUT_DIR}/easytier-core"
+
+  # Strip a copy to show the actual release (non-debug) disk size.
+  # strip removes: .symtab, .strtab, .debug_* — all non-load metadata.
+  # The remaining LOAD segments (.text, .rodata, .data, .bss) are what
+  # ends up in the real release binary.
+  STRIPPED="${OUTPUT_DIR}/easytier-core-stripped"
+  cp "$BINARY" "$STRIPPED"
+  strip "$STRIPPED"
+  UNSTRIPPED_SIZE=$(stat --format=%s "$BINARY")
+  STRIPPED_SIZE=$(stat --format=%s "$STRIPPED")
+  DEBUG_OVERHEAD=$((UNSTRIPPED_SIZE - STRIPPED_SIZE))
+  echo ""
+  echo "  Release size estimate:"
+  echo "    Unstripped: $(numfmt --to=iec $UNSTRIPPED_SIZE) (${UNSTRIPPED_SIZE} bytes)"
+  echo "    Stripped:   $(numfmt --to=iec $STRIPPED_SIZE) (${STRIPPED_SIZE} bytes)"
+  echo "    Overhead:   $(numfmt --to=iec $DEBUG_OVERHEAD) (debug + symbol tables)"
 else
   echo "  WARNING: skipping binary copy, file not found at ${BINARY}"
 fi
@@ -312,14 +328,30 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
   {
     echo "## Bloat Analysis Results"
     echo ""
-    echo "| File | Size |"
-    echo "|------|------|"
+    echo "| Build | Size |"
+    echo "|-------|------|"
     if [[ -f "$BINARY" ]]; then
-      echo "| easytier-core | $(ls -lh "$BINARY" | awk '{print $5}') |"
+      UNSTRIPPED_SIZE=$(stat --format=%s "$BINARY")
+      echo "| Unstripped (debug) | $(numfmt --to=iec $UNSTRIPPED_SIZE) |"
+    fi
+    if [[ -f "${OUTPUT_DIR}/easytier-core-stripped" ]]; then
+      STRIPPED_SIZE=$(stat --format=%s "${OUTPUT_DIR}/easytier-core-stripped")
+      echo "| **Stripped (release)** | **$(numfmt --to=iec $STRIPPED_SIZE)** |"
     fi
     if [[ -f "$BLOATY_REPORT" ]]; then
       echo "| bloat-report.txt | $(wc -l < "$BLOATY_REPORT") lines |"
     fi
+    echo ""
+    echo "> **Note**: The bloat report below uses **VM Size** (virtual memory footprint),"
+    echo "> which is unaffected by debug info. The File Size column includes debug"
+    echo "> symbol overhead; use the Stripped row above for the actual release disk size."
+    echo ""
+    echo "### Build Configuration"
+    echo "- Version: ${VERSION}"
+    echo "- Features: ${LITE_FEATURES}"
+    echo "- LTO: off (preserves per-crate attribution)"
+    echo "- Strip: false (debug build for bloaty analysis)"
+    echo "- Opt level: z"
     echo ""
     echo "### Paths"
     echo "- WORKSPACE: ${WORKSPACE}"
