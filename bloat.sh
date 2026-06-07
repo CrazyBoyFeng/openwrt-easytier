@@ -203,7 +203,7 @@ echo ""
 BLOATY_RAW="${OUTPUT_DIR}/bloaty-raw.txt"
 BLOATY_REPORT="${OUTPUT_DIR}/bloat-report.txt"
 
-"$BLOATY_BIN" "$BINARY" -- compileunits \
+"$BLOATY_BIN" -d compileunits "$BINARY" \
   > "$BLOATY_RAW" 2>&1 \
   || { echo "ERROR: bloaty failed (exit $?)" >&2; exit 1; }
 
