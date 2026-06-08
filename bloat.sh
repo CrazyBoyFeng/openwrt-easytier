@@ -239,11 +239,19 @@ def extract_crate_name(path):
         parts = re.split(r"-(?=\d)", name_ver, 1)
         return parts[0] if parts else name_ver
     # Pattern 2: .../<name>/src/... (git dep, rustc std, workspace member)
-    # e.g. .cargo/git/checkouts/.../9496479/kcp_sys/src/lib.rs -> kcp_sys
+    # e.g. .cargo/git/checkouts/kcp-sys-xxx/9496479/src/lib.rs -> kcp-sys
     #       rustc/<hash>/library/std/src/lib.rs -> std
     m = re.search(r"/([^/]+)/src/", path)
     if m:
-        return m.group(1)
+        candidate = m.group(1)
+        # Skip git checkout revision hash (pure hex, 7-40 chars)
+        # and extract crate name from the checkouts directory instead
+        if re.match(r'^[0-9a-f]{7,40}$', candidate):
+            m2 = re.search(r'/checkouts/([a-z][a-z0-9_-]*?)-[0-9a-f]{6,}/', path)
+            if m2:
+                return m2.group(1)
+        else:
+            return candidate
     # Pattern 3: Rust LTO symbol remapping @/ separator
     # e.g. easytier/src/easytier-core.rs/@/easytier_core.95fd1469c661508c-cgu.0 -> easytier_core
     m = re.search(r"/@/([^.]+)", path)
@@ -359,7 +367,14 @@ def extract_crate_name(path):
     # Pattern 2: .../<name>/src/...
     m = re.search(r'/([^/]+)/src/', path)
     if m:
-        return m.group(1)
+        candidate = m.group(1)
+        # Skip git checkout revision hash (pure hex, 7-40 chars)
+        if re.match(r'^[0-9a-f]{7,40}$', candidate):
+            m2 = re.search(r'/checkouts/([a-z][a-z0-9_-]*?)-[0-9a-f]{6,}/', path)
+            if m2:
+                return m2.group(1)
+        else:
+            return candidate
     # Pattern 3: Rust LTO @/ symbol remapping
     m = re.search(r'/@/([^.]+)', path)
     if m:
