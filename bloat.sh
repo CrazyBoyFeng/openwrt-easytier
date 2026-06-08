@@ -246,8 +246,8 @@ def extract_crate_name(path):
         candidate = m.group(1)
         # Skip git checkout revision hash (pure hex, 7-40 chars)
         # and extract crate name from the checkouts directory instead
-        if re.match(r'^[0-9a-f]{7,40}$', candidate):
-            m2 = re.search(r'/checkouts/([a-z][a-z0-9_-]*?)-[0-9a-f]{6,}/', path)
+        if re.match(r"^[0-9a-f]{7,40}$", candidate):
+            m2 = re.search(r"/checkouts/([a-z][a-z0-9_-]*?)-[0-9a-f]{6,}/", path)
             if m2:
                 return m2.group(1)
         else:
