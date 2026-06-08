@@ -242,12 +242,14 @@ fi
 # correct (parent, dep) -> parent_feature mapping via dep:crate specs.
 # e.g. easytier's "kcp" feature = ["dep:kcp-sys"] means easytier's
 # "kcp" feature gates kcp-sys.
+# Note: cargo metadata does not support --no-default-features/--features.
+# It resolves the full workspace, but we only use packages[].features
+# (the feature definitions from Cargo.toml) which is unaffected.
 CARGO_METADATA="${OUTPUT_DIR}/cargo-metadata.json"
 if [[ -f "$CARGO_TREE" ]]; then
   echo "  Generating cargo metadata for feature mapping..."
   if cargo metadata --format-version 1 \
       --manifest-path "${SRC_DIR}/Cargo.toml" \
-      --no-default-features --features "$LITE_FEATURES" \
       > "$CARGO_METADATA" 2>&1; then
     echo "  cargo-metadata.json: $(wc -c < "$CARGO_METADATA") bytes"
   else
