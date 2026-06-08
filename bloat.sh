@@ -401,13 +401,19 @@ for line in lines:
             break
     if idx == -1:
         # Root line (no tree connector)
-        name = re.match(r'(\S+)', line).group(1)
+        m = re.match(r'(\S+)', line)
+        if not m:
+            continue
+        name = m.group(1)
         graph[name] = []
         stack = [(0, name)]
         continue
     depth = idx // 4 + 1
     rest = line[idx + 3:]
-    name = re.match(r'(\S+)', rest).group(1)
+    m = re.match(r'(\S+)', rest)
+    if not m:
+        continue
+    name = m.group(1)
     while len(stack) > 1 and stack[-1][0] >= depth:
         stack.pop()
     parent = stack[-1][1]
