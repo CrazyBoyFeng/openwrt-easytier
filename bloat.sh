@@ -482,6 +482,15 @@ for name, inc in inclusive.items():
     rows.append((name, inc, nd))
 rows.sort(key=lambda x: -x[1])
 
+# --- Build crate -> features mapping ---
+crate_features = {}
+if feature_dir and lite_features:
+    for feat in lite_features:
+        feat_tree = os.path.join(feature_dir, f'{feat}.txt')
+        crates = parse_crate_set(feat_tree)
+        for c in crates:
+            crate_features.setdefault(c, []).append(feat)
+
 # --- Output 1: Inclusive Size Report (VM size only) ---
 output_dir = os.environ.get('OUTPUT_DIR', '.')
 buf1 = io.StringIO()
@@ -489,10 +498,12 @@ buf1.write("Inclusive Size Analysis (VM Size)\n")
 buf1.write(f"Per-crate self sizes total: {fmt(sum(self_sizes.values()))} ({len(self_sizes)} crates)\n")
 buf1.write(f"Dependency graph: {len(graph)} crates from cargo tree (easytier with lite features)\n")
 buf1.write("\n")
-buf1.write(f"{'Crate':<35} {'Inclusive VM Size':>18} {'Direct Deps':>12}\n")
-buf1.write('-' * 67)
+buf1.write(f"{'Crate':<30} {'Inclusive VM Size':>18} {'Deps':>5}  Features\n")
+buf1.write('-' * 85)
 for name, inc, nd in rows:
-    buf1.write(f"\n{name:<35} {fmt(inc):>18} {nd:>12}")
+    feats = crate_features.get(name, [])
+    feat_str = ','.join(feats) if feats else '(core)'
+    buf1.write(f"\n{name:<30} {fmt(inc):>18} {nd:>5}  {feat_str}")
 buf1.write('\n')
 
 with open(os.path.join(output_dir, 'inclusive-size-report.txt'), 'w') as f:
@@ -524,6 +535,9 @@ def print_reverse_tree(buf, crate, visited, prefix=""):
         marker = ""
         if parent in self_sizes:
             marker = f" [bloaty: {fmt(self_sizes[parent])}]"
+        pfeat = crate_features.get(parent, [])
+        if pfeat:
+            marker += f" [{','.join(pfeat)}]"
         buf.write(f"{prefix}{connector}{parent}{marker}\n")
         extension = "    " if is_last else "\u2502   "
         print_reverse_tree(buf, parent, visited, prefix + extension)
