@@ -262,31 +262,41 @@ echo "  bloat-report.txt: $(wc -l < "$BLOATY_REPORT" 2>/dev/null || echo '0') li
 echo "  First 5 lines:"
 head -5 "$BLOATY_REPORT" 2>/dev/null
 
-# ===================== Inclusive size analysis =====================
+# ===================== Inclusive size + dependency chain analysis =====================
 # Combine bloaty per-crate self sizes with Cargo.lock dependency tree
-# to compute inclusive sizes (crate + all transitive dependencies).
+# to compute inclusive sizes and show dependency chains.
 INCLUSIVE_REPORT="${OUTPUT_DIR}/inclusive-size-report.txt"
+DEP_CHAINS_REPORT="${OUTPUT_DIR}/dependency-chains.txt"
 LOCKFILE="${SRC_DIR}/Cargo.lock"
 
 echo ""
-echo "  Computing inclusive sizes (crate + all transitive deps)..."
+echo "  Computing inclusive sizes and dependency chains..."
 
 if [[ ! -f "$LOCKFILE" ]]; then
-  echo "  WARNING: Cargo.lock not found at ${LOCKFILE}, skipping inclusive analysis"
+  echo "  WARNING: Cargo.lock not found at ${LOCKFILE}, skipping analysis"
   echo "(no Cargo.lock)" > "$INCLUSIVE_REPORT"
+  echo "(no Cargo.lock)" > "$DEP_CHAINS_REPORT"
 else
   # bloaty format per line: FILE_PCT FILE_SIZE VM_PCT VM_SIZE COMPILE_UNIT_PATH
   # Cargo.lock has [[package]] entries with name + dependencies.
   # We parse both with Python, compute recursive sizes, and output a
   # table sorted by inclusive VM size descending.
-  # Write Python script to a temp file to avoid heredoc issues
-  PY_SCRIPT=$(mktemp /tmp/inclusive_XXXXXX.py)
-  cat > "$PY_SCRIPT" << 'PYSCRIPT'
-import re, os, sys
+  # Write the Python analysis script to a temp file, then execute.
+  # This avoids heredoc redirection issues in CI environments.
+  PY_SCRIPT=$(mktemp /tmp/bloat-analysis-XXXXXX.py)
+  trap "rm -f '$PY_SCRIPT'" EXIT
+
+  cat > "$PY_SCRIPT" << 'PYEOF'
+import re, os, sys, io
 
 src_dir = os.environ.get('SRC_DIR', '.')
 bloaty_raw = os.environ.get('BLOATY_RAW', '')
 lockfile = os.path.join(src_dir, 'Cargo.lock')
+
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib
 
 def parse_size(s):
     s = s.strip()
@@ -302,11 +312,16 @@ def fmt(b):
     if abs(b) >= 1024: return f"{b/1024:.1f}Ki"
     return f"{b:.0f}B"
 
-try:
-    import tomllib
-except ImportError:
-    import tomli as tomllib
+def extract_crate_name(path):
+    m = re.search(r'([^/]+-\d[^/]*?)/src/', path)
+    if m:
+        nv = m.group(1)
+        parts = re.split(r'-(?=\d)', nv, 1)
+        return parts[0] if parts else nv
+    m = re.search(r'/([^/]+)/src/', path)
+    return m.group(1) if m else path
 
+# Parse Cargo.lock
 with open(lockfile, 'rb') as f:
     data = tomllib.load(f)
 
@@ -331,20 +346,10 @@ with open(bloaty_raw) as f:
         parts = line.split()
         if len(parts) < 5:
             continue
-        # bloaty format: FILE_PCT FILE_SIZE VM_PCT VM_SIZE PATH
         vm_bytes = parse_size(parts[3])
         path = parts[4]
-        # Extract crate name from path
-        m = re.search(r'([^/]+-\d[^/]*?)/src/', path)
-        if m:
-            nv = m.group(1)
-            name = re.split(r'-(?=\d)', nv, 1)[0]
-        else:
-            m = re.search(r'/([^/]+)/src/', path)
-            name = m.group(1) if m else path
+        name = extract_crate_name(path)
         self_sizes[name] = self_sizes.get(name, 0) + vm_bytes
-
-sys.stdout.reconfigure(line_buffering=True)
 
 # Compute inclusive sizes (DFS with per-root visited set for diamond deps)
 inclusive = {}
@@ -363,30 +368,73 @@ for crate in self_sizes:
 # Sort by inclusive VM size descending
 rows = []
 for name, inc in inclusive.items():
-    s = self_sizes.get(name, 0.0)
     nd = len(graph.get(name, []))
-    rows.append((name, s, inc, nd))
-rows.sort(key=lambda x: -x[2])
+    rows.append((name, inc, nd))
+rows.sort(key=lambda x: -x[1])
 
-# Print table
-total_self = sum(self_sizes.values())
-print("Inclusive Size Analysis (VM Size)")
-print(f"Per-crate self sizes total: {fmt(total_self)} ({len(self_sizes)} crates from bloaty)")
-print(f"Dependency graph: {len(graph)} crates from Cargo.lock")
-print()
-print(f"{'Crate':<35} {'Self':>8} {'Inclusive':>10} {'Deps':>5}")
-print('-' * 62)
-for name, s, inc, nd in rows:
-    print(f"{name:<35} {fmt(s):>8} {fmt(inc):>10} {nd:>5}")
-print('-' * 62)
-PYSCRIPT
+# --- Output 1: Inclusive Size Report (VM size only) ---
+output_dir = os.environ.get('OUTPUT_DIR', '.')
+buf1 = io.StringIO()
+buf1.write("Inclusive Size Analysis (VM Size)\n")
+buf1.write(f"Per-crate self sizes total: {fmt(sum(self_sizes.values()))} ({len(self_sizes)} crates)\n")
+buf1.write(f"Dependency graph: {len(graph)} crates from Cargo.lock\n")
+buf1.write("\n")
+buf1.write(f"{'Crate':<35} {'Inclusive VM Size':>18} {'Direct Deps':>12}\n")
+buf1.write('-' * 67)
+for name, inc, nd in rows:
+    buf1.write(f"\n{name:<35} {fmt(inc):>18} {nd:>12}")
+buf1.write('\n')
 
-  SRC_DIR="$SRC_DIR" BLOATY_RAW="$BLOATY_RAW" python3 "$PY_SCRIPT" > "$INCLUSIVE_REPORT"
-  rm -f "$PY_SCRIPT"
+with open(os.path.join(output_dir, 'inclusive-size-report.txt'), 'w') as f:
+    f.write(buf1.getvalue())
+
+# --- Output 2: Dependency Chains ---
+# For each bloaty-identified crate, show its dependency tree.
+# Limit depth to 3 levels to avoid excessive output.
+buf2 = io.StringIO()
+buf2.write("Dependency Chains (bloaty-identified crates)\n")
+buf2.write(f"Showing dependency trees for {len(self_sizes)} crates visible to bloaty\n")
+buf2.write("Depth limit: 3 levels\n")
+buf2.write("\n")
+
+MAX_DEPTH = 3
+
+def print_tree(buf, crate, depth, visited, prefix=""):
+    if depth >= MAX_DEPTH:
+        return
+    visited.add(crate)
+    deps = graph.get(crate, [])
+    for i, dep in enumerate(deps):
+        is_last = (i == len(deps) - 1)
+        connector = "\u2514\u2500\u2500 " if is_last else "\u251c\u2500\u2500 "
+        marker = ""
+        if dep in self_sizes:
+            marker = f" [bloaty: {fmt(self_sizes[dep])}]"
+        buf.write(f"{prefix}{connector}{dep}{marker}\n")
+        if dep not in visited and depth + 1 < MAX_DEPTH:
+            extension = "    " if is_last else "\u2502   "
+            print_tree(buf, dep, depth + 1, visited, prefix + extension)
+
+for name, inc, nd in rows:
+    buf2.write(f"{name}  [inclusive: {fmt(inc)}, direct deps: {nd}]\n")
+    print_tree(buf2, name, 0, set())
+    buf2.write("\n")
+
+with open(os.path.join(output_dir, 'dependency-chains.txt'), 'w') as f:
+    f.write(buf2.getvalue())
+
+print("  Analysis complete.")
+PYEOF
+
+  SRC_DIR="$SRC_DIR" BLOATY_RAW="$BLOATY_RAW" OUTPUT_DIR="$OUTPUT_DIR" \
+    python3 "$PY_SCRIPT"
 
   echo "  inclusive-size-report.txt: $(wc -l < "$INCLUSIVE_REPORT" 2>/dev/null || echo '0') lines"
-  echo "  First 5 lines:"
+  echo "  dependency-chains.txt:    $(wc -l < "$DEP_CHAINS_REPORT" 2>/dev/null || echo '0') lines"
+  echo "  First 5 lines (inclusive):"
   head -5 "$INCLUSIVE_REPORT" 2>/dev/null
+  echo "  First 10 lines (dep chains):"
+  head -10 "$DEP_CHAINS_REPORT" 2>/dev/null
 fi
 
 # ===================== Copy binary =====================
@@ -442,6 +490,11 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     echo "### Inclusive Size Analysis"
     echo '```'
     cat "$INCLUSIVE_REPORT" 2>/dev/null || echo "(empty)"
+    echo '```'
+    echo ""
+    echo "### Dependency Chains"
+    echo '```'
+    cat "$DEP_CHAINS_REPORT" 2>/dev/null || echo "(empty)"
     echo '```'
     echo ""
     echo "### File listing"
