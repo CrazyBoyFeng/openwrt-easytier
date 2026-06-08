@@ -304,11 +304,46 @@ else
   rm -f "$CARGO_TREE"
 fi
 
+# ===================== Per-feature dependency tree =====================
+# For each feature in LITE_FEATURES, generate a cargo tree WITHOUT that feature
+# to identify which crates are uniquely required by it.
+FEATURE_DIR="${OUTPUT_DIR}/feature-trees"
+mkdir -p "$FEATURE_DIR"
+IFS=',' read -ra ALL_FEATURES <<< "$LITE_FEATURES"
+for FEATURE in "${ALL_FEATURES[@]}"; do
+  # Build feature list without this feature
+  WITHOUT=()
+  for F in "${ALL_FEATURES[@]}"; do
+    if [[ "$F" != "$FEATURE" ]]; then
+      WITHOUT+=("$F")
+    fi
+  done
+  WITHOUT_FEATURES=$(IFS=','; echo "${WITHOUT[*]}")
+  FEAT_TREE="${FEATURE_DIR}/without-${FEATURE}.txt"
+  if [[ -n "$WITHOUT_FEATURES" ]]; then
+    cargo tree -p easytier \
+      --manifest-path "${SRC_DIR}/Cargo.toml" \
+      --no-default-features --features "$WITHOUT_FEATURES" \
+      --charset utf8 \
+      > "$FEAT_TREE" 2>/dev/null || true
+  else
+    # No features at all — just core deps
+    cargo tree -p easytier \
+      --manifest-path "${SRC_DIR}/Cargo.toml" \
+      --no-default-features \
+      --charset utf8 \
+      > "$FEAT_TREE" 2>/dev/null || true
+  fi
+  echo "  feature tree (without ${FEATURE}): $(wc -l < "$FEAT_TREE") lines"
+done
+echo "  Per-feature trees generated for ${#ALL_FEATURES[@]} features"
+
 # ===================== Inclusive size + dependency chain analysis =====================
 # Combine bloaty per-crate self sizes with cargo tree dependency graph
 # to compute inclusive sizes and show reverse dependency chains.
 INCLUSIVE_REPORT="${OUTPUT_DIR}/inclusive-size-report.txt"
 DEP_CHAINS_REPORT="${OUTPUT_DIR}/dependency-chains.txt"
+FEATURE_REPORT="${OUTPUT_DIR}/feature-size-report.txt"
 
 echo ""
 echo "  Computing inclusive sizes and dependency chains..."
@@ -317,6 +352,7 @@ if [[ ! -f "$CARGO_TREE" ]]; then
   echo "  WARNING: cargo tree not available, skipping analysis"
   echo "(no cargo tree)" > "$INCLUSIVE_REPORT"
   echo "(no cargo tree)" > "$DEP_CHAINS_REPORT"
+  echo "(no cargo tree)" > "$FEATURE_REPORT"
 else
   # bloaty format per line: FILE_PCT FILE_SIZE VM_PCT VM_SIZE COMPILE_UNIT_PATH
   # cargo tree output is a tree of package names scoped to easytier's
@@ -334,6 +370,8 @@ import re, os, sys, io
 src_dir = os.environ.get('SRC_DIR', '.')
 bloaty_raw = os.environ.get('BLOATY_RAW', '')
 cargo_tree_file = os.environ.get('CARGO_TREE', '')
+feature_dir = os.environ.get('FEATURE_DIR', '')
+lite_features = os.environ.get('LITE_FEATURES', '').split(',')
 
 def parse_size(s):
     s = s.strip()
@@ -517,10 +555,70 @@ for name, inc, nd in rows:
 with open(os.path.join(output_dir, 'dependency-chains.txt'), 'w') as f:
     f.write(buf2.getvalue())
 
+# --- Output 3: Per-Feature Size Analysis ---
+# For each feature, diff the "without this feature" tree against the full tree
+# to find crates uniquely required by that feature, then sum bloaty sizes.
+def parse_crate_set(tree_file):
+    """Extract set of crate names from a cargo tree file."""
+    crates = set()
+    try:
+        with open(tree_file) as f:
+            for line in f:
+                line = line.rstrip()
+                if not line:
+                    continue
+                m = re.match(r'(\S+)', line)
+                if m:
+                    # Skip feature-only lines like "(features: ...)"
+                    name = m.group(1)
+                    if not name.startswith('(') and not name.startswith('['):
+                        crates.add(name)
+    except FileNotFoundError:
+        pass
+    return crates
+
+full_crates = parse_crate_set(cargo_tree_file)
+
+if feature_dir and lite_features:
+    buf3 = io.StringIO()
+    buf3.write("Per-Feature Size Analysis (estimated VM size impact)\n")
+    buf3.write(f"Lite features: {', '.join(lite_features)}\n")
+    buf3.write(f"Full dependency graph: {len(full_crates)} crates\n")
+    buf3.write("\n")
+    buf3.write("For each feature, crates that disappear when the feature is removed\n")
+    buf3.write("are attributed to that feature. Size = sum of self VM sizes of\n")
+    buf3.write("those crates (from bloaty). Overlapping attribution is expected —\n")
+    buf3.write("a crate shared by features is counted in both.\n")
+    buf3.write("\n")
+
+    feature_rows = []
+    for feat in lite_features:
+        feat_tree = os.path.join(feature_dir, f'without-{feat}.txt')
+        without_crates = parse_crate_set(feat_tree)
+        unique_crates = sorted(full_crates - without_crates)
+        # Sum self sizes of uniquely attributable crates
+        feat_size = sum(self_sizes.get(c, 0.0) for c in unique_crates)
+        feature_rows.append((feat, feat_size, unique_crates))
+
+    feature_rows.sort(key=lambda x: -x[1])
+
+    buf3.write(f"{'Feature':<20} {'Est. VM Size':>18} {'Crates':>8}   Attributed Crates\n")
+    buf3.write('-' * 100)
+    for feat, size, crates_list in feature_rows:
+        crates_str = ', '.join(crates_list) if len(crates_list) <= 8 else ', '.join(crates_list[:8]) + f' +{len(crates_list)-8} more'
+        buf3.write(f"\n{feat:<20} {fmt(size):>18} {len(crates_list):>8}   {crates_str}")
+    buf3.write('\n')
+
+    with open(os.path.join(output_dir, 'feature-size-report.txt'), 'w') as f:
+        f.write(buf3.getvalue())
+
+    print(f"  Feature size report: {len(feature_rows)} features analyzed")
+
 print("  Analysis complete.")
 PYEOF
 
-  SRC_DIR="$SRC_DIR" BLOATY_RAW="$BLOATY_RAW" OUTPUT_DIR="$OUTPUT_DIR" CARGO_TREE="${CARGO_TREE:-}" \
+  SRC_DIR="$SRC_DIR" BLOATY_RAW="$BLOATY_RAW" OUTPUT_DIR="$OUTPUT_DIR" \
+    CARGO_TREE="${CARGO_TREE:-}" FEATURE_DIR="${FEATURE_DIR:-}" LITE_FEATURES="$LITE_FEATURES" \
     python3 "$PY_SCRIPT"
 
   echo "  inclusive-size-report.txt: $(wc -l < "$INCLUSIVE_REPORT" 2>/dev/null || echo '0') lines"
@@ -589,6 +687,11 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     echo "### Reverse Dependency Chains"
     echo '```'
     cat "$DEP_CHAINS_REPORT" 2>/dev/null || echo "(empty)"
+    echo '```'
+    echo ""
+    echo "### Per-Feature Size Analysis"
+    echo '```'
+    cat "$FEATURE_REPORT" 2>/dev/null || echo "(empty)"
     echo '```'
     echo ""
     echo "### File listing"
