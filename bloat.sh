@@ -334,6 +334,32 @@ for pkg in data.get('package', []):
         deps.append(re.split(r'[\s/?]', d)[0])
     graph[name] = deps
 
+# Filter to only crates reachable from 'easytier' (the crate that produces
+# easytier-core). Cargo.lock includes all workspace members (easytier-android-jni,
+# easytier-ffi, easytier-gui, etc.) which are not part of our binary's dependency
+# tree and should not appear in dependency chains.
+def reachable_from(root):
+    visited = set()
+    stack = [root]
+    while stack:
+        c = stack.pop()
+        if c in visited:
+            continue
+        visited.add(c)
+        for dep in graph.get(c, []):
+            if dep not in visited:
+                stack.append(dep)
+    return visited
+
+reachable = reachable_from('easytier')
+unreachable = [c for c in graph if c not in reachable]
+if unreachable:
+    # Remove unreachable crates from the graph
+    for c in unreachable:
+        del graph[c]
+    print(f"  Filtered out {len(unreachable)} crates not reachable from easytier (e.g. {', '.join(sorted(unreachable)[:5])}{'...' if len(unreachable) > 5 else ''})")
+print(f"  Dependency graph: {len(graph)} crates reachable from easytier")
+
 # Parse bloaty raw output: {crate_name: vm_size_bytes}
 self_sizes = {}
 with open(bloaty_raw) as f:
@@ -377,7 +403,7 @@ output_dir = os.environ.get('OUTPUT_DIR', '.')
 buf1 = io.StringIO()
 buf1.write("Inclusive Size Analysis (VM Size)\n")
 buf1.write(f"Per-crate self sizes total: {fmt(sum(self_sizes.values()))} ({len(self_sizes)} crates)\n")
-buf1.write(f"Dependency graph: {len(graph)} crates from Cargo.lock\n")
+buf1.write(f"Dependency graph: {len(graph)} crates from Cargo.lock (reachable from easytier)\n")
 buf1.write("\n")
 buf1.write(f"{'Crate':<35} {'Inclusive VM Size':>18} {'Direct Deps':>12}\n")
 buf1.write('-' * 67)
