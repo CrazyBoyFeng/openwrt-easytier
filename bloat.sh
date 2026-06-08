@@ -602,15 +602,11 @@ rows.sort(key=lambda x: -x[1])
 # --- Output 1: Inclusive Size Report (VM size only) ---
 output_dir = os.environ.get('OUTPUT_DIR', '.')
 buf1 = io.StringIO()
-buf1.write("Inclusive Size Analysis (VM Size)\n")
-buf1.write(f"Per-crate self sizes total: {fmt(sum(self_sizes.values()))} ({len(self_sizes)} crates)\n")
-buf1.write(f"Dependency graph: {len(graph)} crates from cargo tree (easytier with lite features)\n")
-buf1.write("\n")
-buf1.write(f"{'Crate':<35} {'Inclusive VM Size':>18} {'All Deps':>12}\n")
+buf1.write(f"{'Inclusive VM Size':>18} {'All Deps':>12} {'Crate':<35}\n")
 buf1.write('-' * 67)
 for name, inc, nd in rows:
-    buf1.write(f"\n{name:<35} {fmt(inc):>18} {nd:>12}")
-buf1.write('\n')
+    buf1.write(f"\n{fmt(inc):>18} {nd:>12} {name:<35}")
+buf1.write(f"\n{fmt(sum(self_sizes.values())):>18} {len(graph):>12} {'total':<35}\n")
 
 with open(os.path.join(output_dir, 'inclusive-size-report.txt'), 'w') as f:
     f.write(buf1.getvalue())
