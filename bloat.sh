@@ -357,31 +357,20 @@ def extract_crate_name(path):
         return last
     return path
 
-# Collect data lines for reformatted output
-data_lines = []
 for line in sys.stdin:
     stripped = line.rstrip("\n")
     # Skip debug section lines (DWARF metadata, not code)
     if re.search(r"\[section \.debug_", stripped):
         continue
-    # Skip original header/separator lines
-    if stripped.startswith("---") or stripped.startswith("FILE") or stripped.startswith("VM"):
-        continue
-    parts = stripped.split()
-    if len(parts) >= 5:
-        file_pct = parts[0]
-        file_size = parts[1]
-        vm_pct = parts[2]
-        vm_size = parts[3]
-        path = " ".join(parts[4:])
+    # Replace file paths with clean crate names
+    # Match paths ending with .ext (covers /src/ paths and C source paths)
+    m = re.search(r"(\S+\.\w+)$", stripped)
+    if m:
+        path = m.group(1)
         crate_name = extract_crate_name(path)
-        data_lines.append((crate_name, file_pct, file_size, vm_pct, vm_size))
-
-# Print reformatted: Crate  File Size  VM Size
-print(f"  {'Crate':<40} {'File Size':>14} {'VM Size':>14}")
-print(f"  {'-'*40} {'-'*14} {'-'*14}")
-for crate_name, file_pct, file_size, vm_pct, vm_size in data_lines:
-    print(f"  {crate_name:<40} {file_pct:>5} {file_size:>8} {vm_pct:>5} {vm_size:>8}")
+        if crate_name != path:
+            stripped = stripped[:m.start()] + crate_name + stripped[m.end():]
+    print(stripped)
 ' "$C_PREFIX_MAP" < "$BLOATY_RAW" > "$BLOATY_REPORT"
 
 echo "  bloat-report.txt: $(wc -l < "$BLOATY_REPORT" 2>/dev/null || echo '0') lines"
