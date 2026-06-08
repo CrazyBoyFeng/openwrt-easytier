@@ -538,9 +538,18 @@ for crate in self_sizes:
 
 # Sort by inclusive VM size descending
 rows = []
+# Compute all deps count (recursive) for each crate
+def count_all_deps(crate, visited):
+    visited.add(crate)
+    total = 0
+    for dep in graph.get(crate, []):
+        if dep not in visited:
+            total += 1 + count_all_deps(dep, visited)
+    return total
+
 for name, inc in inclusive.items():
-    nd = len(graph.get(name, []))
-    rows.append((name, inc, nd))
+    na = count_all_deps(name, set())
+    rows.append((name, inc, na))
 rows.sort(key=lambda x: -x[1])
 
 # --- Output 1: Inclusive Size Report (VM size only) ---
@@ -550,7 +559,7 @@ buf1.write("Inclusive Size Analysis (VM Size)\n")
 buf1.write(f"Per-crate self sizes total: {fmt(sum(self_sizes.values()))} ({len(self_sizes)} crates)\n")
 buf1.write(f"Dependency graph: {len(graph)} crates from cargo tree (easytier with lite features)\n")
 buf1.write("\n")
-buf1.write(f"{'Crate':<35} {'Inclusive VM Size':>18} {'Direct Deps':>12}\n")
+buf1.write(f"{'Crate':<35} {'Inclusive VM Size':>18} {'All Deps':>12}\n")
 buf1.write('-' * 67)
 for name, inc, nd in rows:
     buf1.write(f"\n{name:<35} {fmt(inc):>18} {nd:>12}")
