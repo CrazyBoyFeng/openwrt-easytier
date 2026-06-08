@@ -304,29 +304,11 @@ else
   rm -f "$CARGO_TREE"
 fi
 
-# ===================== Per-feature dependency tree =====================
-# For each feature, generate a cargo tree with ONLY that feature enabled.
-# This directly shows the crates required by each feature individually.
-FEATURE_DIR="${OUTPUT_DIR}/feature-trees"
-mkdir -p "$FEATURE_DIR"
-IFS=',' read -ra ALL_FEATURES <<< "$LITE_FEATURES"
-for FEATURE in "${ALL_FEATURES[@]}"; do
-  FEAT_TREE="${FEATURE_DIR}/${FEATURE}.txt"
-  cargo tree -p easytier \
-    --manifest-path "${SRC_DIR}/Cargo.toml" \
-    --no-default-features --features "$FEATURE" \
-    --charset utf8 \
-    > "$FEAT_TREE" 2>/dev/null || true
-  echo "  feature tree (${FEATURE}): $(wc -l < "$FEAT_TREE") lines"
-done
-echo "  Per-feature trees generated for ${#ALL_FEATURES[@]} features"
-
 # ===================== Inclusive size + dependency chain analysis =====================
 # Combine bloaty per-crate self sizes with cargo tree dependency graph
 # to compute inclusive sizes and show reverse dependency chains.
 INCLUSIVE_REPORT="${OUTPUT_DIR}/inclusive-size-report.txt"
 DEP_CHAINS_REPORT="${OUTPUT_DIR}/dependency-chains.txt"
-FEATURE_REPORT="${OUTPUT_DIR}/feature-size-report.txt"
 
 echo ""
 echo "  Computing inclusive sizes and dependency chains..."
@@ -335,7 +317,6 @@ if [[ ! -f "$CARGO_TREE" ]]; then
   echo "  WARNING: cargo tree not available, skipping analysis"
   echo "(no cargo tree)" > "$INCLUSIVE_REPORT"
   echo "(no cargo tree)" > "$DEP_CHAINS_REPORT"
-  echo "(no cargo tree)" > "$FEATURE_REPORT"
 else
   # bloaty format per line: FILE_PCT FILE_SIZE VM_PCT VM_SIZE COMPILE_UNIT_PATH
   # cargo tree output is a tree of package names scoped to easytier's
@@ -353,8 +334,6 @@ import re, os, sys, io
 src_dir = os.environ.get('SRC_DIR', '.')
 bloaty_raw = os.environ.get('BLOATY_RAW', '')
 cargo_tree_file = os.environ.get('CARGO_TREE', '')
-feature_dir = os.environ.get('FEATURE_DIR', '')
-lite_features = os.environ.get('LITE_FEATURES', '').split(',')
 
 def parse_size(s):
     s = s.strip()
@@ -403,7 +382,7 @@ def extract_crate_name(path):
 #   │   ├── dep_c v1.0.0
 #   │   └── dep_d v1.0.0
 #   └── dep_b v1.0.0
-# Parse by tracking depth via tree connector position (├/└).
+# Parse by counting │ characters for depth, finding ├/└ as connector.
 # This is feature-aware and scoped to easytier — no other workspace members.
 graph = {}
 with open(cargo_tree_file) as f:
@@ -414,7 +393,7 @@ for line in lines:
     line = line.rstrip()
     if not line:
         continue
-    # Find position of tree connector (├ or └)
+    # Find tree connector (├ or └)
     idx = -1
     for i, ch in enumerate(line):
         if ch in ('\u251c', '\u2514'):
@@ -429,12 +408,16 @@ for line in lines:
         graph[name] = []
         stack = [(0, name)]
         continue
-    depth = idx // 4 + 1
+    # Depth = number of │ characters before the connector + 1
+    depth = line[:idx].count('\u2502') + 1
     rest = line[idx + 3:]
     m = re.match(r'(\S+)', rest)
     if not m:
         continue
     name = m.group(1)
+    # Skip metadata lines like [build-dependencies]
+    if name.startswith('['):
+        continue
     while len(stack) > 1 and stack[-1][0] >= depth:
         stack.pop()
     parent = stack[-1][1]
@@ -472,24 +455,6 @@ def dfs(crate, visited):
         total += dfs(dep, visited)
     return total
 
-def parse_crate_set(tree_file):
-    """Extract set of crate names from a cargo tree file."""
-    crates = set()
-    try:
-        with open(tree_file) as f:
-            for line in f:
-                line = line.rstrip()
-                if not line:
-                    continue
-                m = re.match(r'(\S+)', line)
-                if m:
-                    name = m.group(1)
-                    if not name.startswith('(') and not name.startswith('['):
-                        crates.add(name)
-    except FileNotFoundError:
-        pass
-    return crates
-
 for crate in self_sizes:
     inclusive[crate] = dfs(crate, set())
 
@@ -500,15 +465,6 @@ for name, inc in inclusive.items():
     rows.append((name, inc, nd))
 rows.sort(key=lambda x: -x[1])
 
-# --- Build crate -> features mapping ---
-crate_features = {}
-if feature_dir and lite_features:
-    for feat in lite_features:
-        feat_tree = os.path.join(feature_dir, f'{feat}.txt')
-        crates = parse_crate_set(feat_tree)
-        for c in crates:
-            crate_features.setdefault(c, []).append(feat)
-
 # --- Output 1: Inclusive Size Report (VM size only) ---
 output_dir = os.environ.get('OUTPUT_DIR', '.')
 buf1 = io.StringIO()
@@ -516,35 +472,28 @@ buf1.write("Inclusive Size Analysis (VM Size)\n")
 buf1.write(f"Per-crate self sizes total: {fmt(sum(self_sizes.values()))} ({len(self_sizes)} crates)\n")
 buf1.write(f"Dependency graph: {len(graph)} crates from cargo tree (easytier with lite features)\n")
 buf1.write("\n")
-buf1.write(f"{'Crate':<30} {'Inclusive VM Size':>18} {'Deps':>5}  Features\n")
-buf1.write('-' * 85)
+buf1.write(f"{'Crate':<35} {'Inclusive VM Size':>18} {'Direct Deps':>12}\n")
+buf1.write('-' * 67)
 for name, inc, nd in rows:
-    feats = crate_features.get(name, [])
-    feat_str = ','.join(feats) if feats else '(core)'
-    buf1.write(f"\n{name:<30} {fmt(inc):>18} {nd:>5}  {feat_str}")
+    buf1.write(f"\n{name:<35} {fmt(inc):>18} {nd:>12}")
 buf1.write('\n')
 
 with open(os.path.join(output_dir, 'inclusive-size-report.txt'), 'w') as f:
     f.write(buf1.getvalue())
 
 # --- Output 2: Reverse Dependency Chains ---
-# Show who depends on each bloaty-identified crate (branch/trunk view).
-# Build a reverse graph from cargo tree and traverse upward.
-# All dependents are shown; bloaty-identified ones are annotated with size.
 buf2 = io.StringIO()
 buf2.write("Reverse Dependency Chains (who depends on each crate)\n")
 buf2.write(f"Showing {len(self_sizes)} crates visible to bloaty\n")
 buf2.write(f"Reverse dependency graph from cargo tree ({len(graph)} crates)\n")
 buf2.write("\n")
 
-# Build reverse graph: {crate: set(crates that depend on it)}
 reverse_graph = {}
 for crate, deps in graph.items():
     for dep in deps:
         reverse_graph.setdefault(dep, set()).add(crate)
 
 def print_reverse_tree(buf, crate, visited, prefix=""):
-    """Print reverse tree: who depends on this crate, going up."""
     visited.add(crate)
     parents = sorted(reverse_graph.get(crate, set()) - visited)
     for i, parent in enumerate(parents):
@@ -553,9 +502,6 @@ def print_reverse_tree(buf, crate, visited, prefix=""):
         marker = ""
         if parent in self_sizes:
             marker = f" [bloaty: {fmt(self_sizes[parent])}]"
-        pfeat = crate_features.get(parent, [])
-        if pfeat:
-            marker += f" [{','.join(pfeat)}]"
         buf.write(f"{prefix}{connector}{parent}{marker}\n")
         extension = "    " if is_last else "\u2502   "
         print_reverse_tree(buf, parent, visited, prefix + extension)
@@ -570,43 +516,11 @@ for name, inc, nd in rows:
 with open(os.path.join(output_dir, 'dependency-chains.txt'), 'w') as f:
     f.write(buf2.getvalue())
 
-# --- Output 3: Per-Feature Size Analysis ---
-# Each feature tree was generated with ONLY that feature enabled,
-# so the crate set directly represents that feature's dependencies.
-if feature_dir and lite_features:
-    buf3 = io.StringIO()
-    buf3.write("Per-Feature Size Analysis (estimated VM size)\n")
-    buf3.write(f"Lite features: {', '.join(lite_features)}\n")
-    buf3.write("Each feature tree was generated with ONLY that feature enabled.\n")
-    buf3.write("Size = sum of bloaty self VM sizes of crates in the tree.\n")
-    buf3.write("\n")
-
-    feature_rows = []
-    for feat in lite_features:
-        feat_tree = os.path.join(feature_dir, f'{feat}.txt')
-        crates = parse_crate_set(feat_tree)
-        feat_size = sum(self_sizes.get(c, 0.0) for c in crates)
-        feature_rows.append((feat, feat_size, sorted(crates)))
-
-    feature_rows.sort(key=lambda x: -x[1])
-
-    buf3.write(f"{'Feature':<20} {'Est. VM Size':>18} {'Crates':>8}   Crates\n")
-    buf3.write('-' * 100)
-    for feat, size, crates_list in feature_rows:
-        crates_str = ', '.join(crates_list) if len(crates_list) <= 8 else ', '.join(crates_list[:8]) + f' +{len(crates_list)-8} more'
-        buf3.write(f"\n{feat:<20} {fmt(size):>18} {len(crates_list):>8}   {crates_str}")
-    buf3.write('\n')
-
-    with open(os.path.join(output_dir, 'feature-size-report.txt'), 'w') as f:
-        f.write(buf3.getvalue())
-
-    print(f"  Feature size report: {len(feature_rows)} features analyzed")
-
 print("  Analysis complete.")
 PYEOF
 
   SRC_DIR="$SRC_DIR" BLOATY_RAW="$BLOATY_RAW" OUTPUT_DIR="$OUTPUT_DIR" \
-    CARGO_TREE="${CARGO_TREE:-}" FEATURE_DIR="${FEATURE_DIR:-}" LITE_FEATURES="$LITE_FEATURES" \
+    CARGO_TREE="${CARGO_TREE:-}" \
     python3 "$PY_SCRIPT"
 
   echo "  inclusive-size-report.txt: $(wc -l < "$INCLUSIVE_REPORT" 2>/dev/null || echo '0') lines"
@@ -675,11 +589,6 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     echo "### Reverse Dependency Chains"
     echo '```'
     cat "$DEP_CHAINS_REPORT" 2>/dev/null || echo "(empty)"
-    echo '```'
-    echo ""
-    echo "### Per-Feature Size Analysis"
-    echo '```'
-    cat "$FEATURE_REPORT" 2>/dev/null || echo "(empty)"
     echo '```'
     echo ""
     echo "### File listing"
