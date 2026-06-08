@@ -390,12 +390,12 @@ with open(os.path.join(output_dir, 'inclusive-size-report.txt'), 'w') as f:
 
 # --- Output 2: Reverse Dependency Chains ---
 # Show who depends on each bloaty-identified crate (branch/trunk view).
-# Build a reverse graph and traverse upward from each bloaty crate.
-# Only bloaty-identified crates are expanded; others are collapsed.
+# Build a reverse graph from Cargo.lock and traverse upward.
+# All dependents are shown; bloaty-identified ones are annotated with size.
 buf2 = io.StringIO()
 buf2.write("Reverse Dependency Chains (who depends on each crate)\n")
 buf2.write(f"Showing {len(self_sizes)} crates visible to bloaty\n")
-buf2.write("Only bloaty-identified crates are expanded; others are collapsed\n")
+buf2.write(f"Reverse dependency graph built from Cargo.lock ({len(graph)} crates)\n")
 buf2.write("\n")
 
 # Build reverse graph: {crate: set(crates that depend on it)}
@@ -404,28 +404,30 @@ for crate, deps in graph.items():
     for dep in deps:
         reverse_graph.setdefault(dep, set()).add(crate)
 
-def print_reverse_tree(buf, crate, visited, prefix=""):
+MAX_DEPTH = 5
+
+def print_reverse_tree(buf, crate, depth, visited, prefix=""):
     """Print reverse tree: who depends on this crate, going up."""
+    if depth >= MAX_DEPTH:
+        return
     visited.add(crate)
-    parents = reverse_graph.get(crate, set())
-    bloaty_parents = sorted([p for p in parents if p in self_sizes and p not in visited])
-    other_count = len(parents) - len([p for p in parents if p in self_sizes])
-    for i, parent in enumerate(bloaty_parents):
-        is_last = (i == len(bloaty_parents) - 1) and other_count == 0
+    parents = sorted(reverse_graph.get(crate, set()) - visited)
+    for i, parent in enumerate(parents):
+        is_last = (i == len(parents) - 1)
         connector = "\u2514\u2500\u2500 " if is_last else "\u251c\u2500\u2500 "
-        buf.write(f"{prefix}{connector}{parent} [bloaty: {fmt(self_sizes[parent])}]\n")
-        if parent not in visited:
+        marker = ""
+        if parent in self_sizes:
+            marker = f" [bloaty: {fmt(self_sizes[parent])}]"
+        buf.write(f"{prefix}{connector}{parent}{marker}\n")
+        if depth + 1 < MAX_DEPTH:
             extension = "    " if is_last else "\u2502   "
-            print_reverse_tree(buf, parent, visited, prefix + extension)
-    if other_count > 0:
-        connector = "\u2514\u2500\u2500 "
-        buf.write(f"{prefix}{connector}+ {other_count} other dependents (not visible to bloaty)\n")
+            print_reverse_tree(buf, parent, depth + 1, visited, prefix + extension)
 
 for name, inc, nd in rows:
     total_parents = len(reverse_graph.get(name, set()))
     buf2.write(f"{name}  [self: {fmt(self_sizes[name])}, inclusive: {fmt(inc)}, "
                f"used by {total_parents} crates]\n")
-    print_reverse_tree(buf2, name, set())
+    print_reverse_tree(buf2, name, 0, set())
     buf2.write("\n")
 
 with open(os.path.join(output_dir, 'dependency-chains.txt'), 'w') as f:
