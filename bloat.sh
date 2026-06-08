@@ -250,7 +250,7 @@ if [[ -f "$CARGO_TREE" ]]; then
   echo "  Generating cargo metadata for feature mapping..."
   if cargo metadata --format-version 1 \
       --manifest-path "${SRC_DIR}/Cargo.toml" \
-      > "$CARGO_METADATA" 2>&1; then
+      > "$CARGO_METADATA" 2>/dev/null; then
     echo "  cargo-metadata.json: $(wc -c < "$CARGO_METADATA") bytes"
   else
     echo "  WARNING: cargo metadata failed, feature annotations will be skipped"
@@ -538,7 +538,8 @@ feature_map = {}
 cargo_metadata_file = os.environ.get('CARGO_METADATA', '')
 if cargo_metadata_file and os.path.exists(cargo_metadata_file):
     with open(cargo_metadata_file) as f:
-        meta = json.load(f)
+        raw = f.read().strip()
+    meta = json.loads(raw)
     for pkg in meta.get('packages', []):
         pkg_name = pkg['name']
         for feat_name, feat_values in pkg.get('features', {}).items():
