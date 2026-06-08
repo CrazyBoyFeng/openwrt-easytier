@@ -9,7 +9,7 @@
 # produce any packages.  It builds directly with cargo on the host.
 #
 # Key differences from the production build:
-#   - LTO=fat   : matches release build, inlined code attributed to caller
+#   - LTO=fat   : matches release build for realistic code sizes
 #   - strip=false: keeps symbol table + debug sections (required by bloaty)
 #   - debug=true : emits DWARF debug info (required by bloaty)
 #
@@ -23,6 +23,7 @@
 #
 # Output:
 #   bloat-output/bloat-report.txt  — per-crate text breakdown
+#   bloat-output/inclusive-size-report.txt — per-crate recursive VM size
 #   bloat-output/easytier-core     — the unstripped ELF binary
 
 set -euo pipefail
@@ -176,10 +177,6 @@ export RUSTFLAGS="--remap-path-prefix=$(pwd)/= \
 # cargo install --path treats the crate as standalone (no workspace
 # feature unification), unlike cargo build which always discovers
 # the workspace root and unifies features across all members.
-#
-# With LTO=fat, code inlined from dependencies (e.g. ring -> snow)
-# is attributed to the caller's compile unit by bloaty, giving a
-# more accurate picture of per-crate total contribution.
 cargo install --path "$SRC_DIR/easytier" \
   --locked \
   --bin easytier-core \
@@ -282,7 +279,9 @@ else
   # Cargo.lock has [[package]] entries with name + dependencies.
   # We parse both with Python, compute recursive sizes, and output a
   # table sorted by inclusive VM size descending.
-  SRC_DIR="$SRC_DIR" BLOATY_RAW="$BLOATY_RAW" python3 << 'PYEOF' > "$INCLUSIVE_REPORT"
+  # Write Python script to a temp file to avoid heredoc issues
+  PY_SCRIPT=$(mktemp /tmp/inclusive_XXXXXX.py)
+  cat > "$PY_SCRIPT" << 'PYSCRIPT'
 import re, os, sys
 
 src_dir = os.environ.get('SRC_DIR', '.')
@@ -345,6 +344,8 @@ with open(bloaty_raw) as f:
             name = m.group(1) if m else path
         self_sizes[name] = self_sizes.get(name, 0) + vm_bytes
 
+sys.stdout.reconfigure(line_buffering=True)
+
 # Compute inclusive sizes (DFS with per-root visited set for diamond deps)
 inclusive = {}
 def dfs(crate, visited):
@@ -370,7 +371,7 @@ rows.sort(key=lambda x: -x[2])
 # Print table
 total_self = sum(self_sizes.values())
 print("Inclusive Size Analysis (VM Size)")
-print(f"Per-crate self sizes total: {fmt(total_self)} ({len(self_sizes)} crates)")
+print(f"Per-crate self sizes total: {fmt(total_self)} ({len(self_sizes)} crates from bloaty)")
 print(f"Dependency graph: {len(graph)} crates from Cargo.lock")
 print()
 print(f"{'Crate':<35} {'Self':>8} {'Inclusive':>10} {'Deps':>5}")
@@ -378,33 +379,21 @@ print('-' * 62)
 for name, s, inc, nd in rows:
     print(f"{name:<35} {fmt(s):>8} {fmt(inc):>10} {nd:>5}")
 print('-' * 62)
-PYEOF
+PYSCRIPT
+
+  SRC_DIR="$SRC_DIR" BLOATY_RAW="$BLOATY_RAW" python3 "$PY_SCRIPT" > "$INCLUSIVE_REPORT"
+  rm -f "$PY_SCRIPT"
 
   echo "  inclusive-size-report.txt: $(wc -l < "$INCLUSIVE_REPORT" 2>/dev/null || echo '0') lines"
   echo "  First 5 lines:"
   head -5 "$INCLUSIVE_REPORT" 2>/dev/null
 fi
 
-# ===================== Copy binary + strip for release size =====================
+# ===================== Copy binary =====================
 if [[ -f "$BINARY" ]]; then
   cp "$BINARY" "${OUTPUT_DIR}/easytier-core"
   echo "  Binary copied to ${OUTPUT_DIR}/easytier-core"
-
-  # Strip a copy to show the actual release (non-debug) disk size.
-  # strip removes: .symtab, .strtab, .debug_* — all non-load metadata.
-  # The remaining LOAD segments (.text, .rodata, .data, .bss) are what
-  # ends up in the real release binary.
-  STRIPPED="${OUTPUT_DIR}/easytier-core-stripped"
-  cp "$BINARY" "$STRIPPED"
-  strip "$STRIPPED"
-  UNSTRIPPED_SIZE=$(stat --format=%s "$BINARY")
-  STRIPPED_SIZE=$(stat --format=%s "$STRIPPED")
-  DEBUG_OVERHEAD=$((UNSTRIPPED_SIZE - STRIPPED_SIZE))
-  echo ""
-  echo "  Release size estimate:"
-  echo "    Unstripped: $(numfmt --to=iec $UNSTRIPPED_SIZE) (${UNSTRIPPED_SIZE} bytes)"
-  echo "    Stripped:   $(numfmt --to=iec $STRIPPED_SIZE) (${STRIPPED_SIZE} bytes)"
-  echo "    Overhead:   $(numfmt --to=iec $DEBUG_OVERHEAD) (debug + symbol tables)"
+  echo "  Binary size: $(ls -lh "$BINARY" | awk '{print $5}')"
 else
   echo "  WARNING: skipping binary copy, file not found at ${BINARY}"
 fi
@@ -418,23 +407,17 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
   {
     echo "## Bloat Analysis Results"
     echo ""
-    echo "| Build | Size |"
-    echo "|-------|------|"
+    echo "| File | Size |"
+    echo "|------|------|"
     if [[ -f "$BINARY" ]]; then
-      UNSTRIPPED_SIZE=$(stat --format=%s "$BINARY")
-      echo "| Unstripped (debug) | $(numfmt --to=iec $UNSTRIPPED_SIZE) |"
-    fi
-    if [[ -f "${OUTPUT_DIR}/easytier-core-stripped" ]]; then
-      STRIPPED_SIZE=$(stat --format=%s "${OUTPUT_DIR}/easytier-core-stripped")
-      echo "| **Stripped (release)** | **$(numfmt --to=iec $STRIPPED_SIZE)** |"
+      echo "| easytier-core | $(ls -lh "$BINARY" | awk '{print $5}') |"
     fi
     if [[ -f "$BLOATY_REPORT" ]]; then
       echo "| bloat-report.txt | $(wc -l < "$BLOATY_REPORT") lines |"
     fi
     echo ""
-    echo "> **Note**: The bloat report below uses **VM Size** (virtual memory footprint),"
-    echo "> which is unaffected by debug info. The File Size column includes debug"
-    echo "> symbol overhead; use the Stripped row above for the actual release disk size."
+    echo "> **Note**: VM Size reflects actual memory footprint per crate and is"
+    echo "> unaffected by debug info. File Size includes debug symbol overhead."
     echo ""
     echo "### Build Configuration"
     echo "- Version: ${VERSION}"
