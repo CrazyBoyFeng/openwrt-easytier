@@ -472,6 +472,24 @@ def dfs(crate, visited):
         total += dfs(dep, visited)
     return total
 
+def parse_crate_set(tree_file):
+    """Extract set of crate names from a cargo tree file."""
+    crates = set()
+    try:
+        with open(tree_file) as f:
+            for line in f:
+                line = line.rstrip()
+                if not line:
+                    continue
+                m = re.match(r'(\S+)', line)
+                if m:
+                    name = m.group(1)
+                    if not name.startswith('(') and not name.startswith('['):
+                        crates.add(name)
+    except FileNotFoundError:
+        pass
+    return crates
+
 for crate in self_sizes:
     inclusive[crate] = dfs(crate, set())
 
@@ -551,24 +569,6 @@ for name, inc, nd in rows:
 
 with open(os.path.join(output_dir, 'dependency-chains.txt'), 'w') as f:
     f.write(buf2.getvalue())
-
-def parse_crate_set(tree_file):
-    """Extract set of crate names from a cargo tree file."""
-    crates = set()
-    try:
-        with open(tree_file) as f:
-            for line in f:
-                line = line.rstrip()
-                if not line:
-                    continue
-                m = re.match(r'(\S+)', line)
-                if m:
-                    name = m.group(1)
-                    if not name.startswith('(') and not name.startswith('['):
-                        crates.add(name)
-    except FileNotFoundError:
-        pass
-    return crates
 
 # --- Output 3: Per-Feature Size Analysis ---
 # Each feature tree was generated with ONLY that feature enabled,
