@@ -236,12 +236,21 @@ def extract_crate_name(path):
         name_ver = m.group(1)
         parts = re.split(r"-(?=\d)", name_ver, 1)
         return parts[0] if parts else name_ver
-    # Pattern: .../<name>/src/...  (no version)
-    # e.g. =.cargo/registry/src/<hash>/easytier/src/lib.rs
-    #       rustc/<hash>/library/std/src/lib.rs
+    # Pattern: git checkout path with commit hash in directory
+    # e.g. .cargo/git/checkouts/kcp-sys-44d9a24c/9496479/kcp_sys/src/lib.rs -> kcp_sys
+    #       .cargo/git/checkouts/<name>-<hash>/<commit>/<name>/src/...
     m = re.search(r"/([^/]+)/src/", path)
     if m:
         return m.group(1)
+    # Fallback: return last path segment stripped of -cgu.N suffix and hash
+    # e.g. easytier_core.95fd1469c661508c-cgu.0 -> easytier_core
+    last = path.rstrip("/").rsplit("/", 1)[-1]
+    # Strip -cgu.N suffix
+    last = re.sub(r"-cgu\.\d+$", "", last)
+    # Strip leading .hash suffix (symbol hash like .95fd1469c661508c)
+    last = re.sub(r"\.[0-9a-f]{16,}$", "", last)
+    if last:
+        return last
     return path
 
 for line in sys.stdin:
@@ -333,7 +342,13 @@ def extract_crate_name(path):
         parts = re.split(r'-(?=\d)', nv, 1)
         return parts[0] if parts else nv
     m = re.search(r'/([^/]+)/src/', path)
-    return m.group(1) if m else path
+    if m:
+        return m.group(1)
+    # Fallback: strip -cgu.N and .hash suffix
+    last = path.rstrip('/').rsplit('/', 1)[-1]
+    last = re.sub(r'-cgu\.\d+$', '', last)
+    last = re.sub(r'\.[0-9a-f]{16,}$', '', last)
+    return last if last else path
 
 # Build dependency graph from cargo tree output
 # cargo tree output format (UTF-8):
