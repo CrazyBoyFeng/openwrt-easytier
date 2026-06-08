@@ -537,15 +537,16 @@ if cargo_tree_features_file and os.path.exists(cargo_tree_features_file):
         fline = fline.rstrip()
         if not fline:
             continue
-        # Parse depth prefix from --prefix depth format: "0 rest", "1 rest", etc.
-        dm = re.match(r'^(\d+)\s+(.*)', fline)
+        # Parse depth prefix from --prefix depth format: "0rest", "1rest", etc.
+        # Note: --prefix depth outputs NO space between depth number and content.
+        dm = re.match(r'^(\d+)\s*(.*)', fline)
         if not dm:
             continue
         fdepth = int(dm.group(1))
         frest = dm.group(2)
-        # Detect feature edge: crate_name (optional version) feature="feat"
-        # e.g. "kcp-sys feature=\"kcp\"" or "kcp-sys v0.1.0 feature=\"kcp\""
-        fm = re.search(r'([a-zA-Z][\w-]*)(?:\s+v[\d.]+)?\s+feature="([^"]+)"', frest)
+        # Detect feature edge: crate_name (optional version) feature "feat"
+        # e.g. "kcp-sys feature \"kcp\"" or "kcp-sys v0.1.0 feature \"kcp\""
+        fm = re.search(r'([a-zA-Z][\w-]*)(?:\s+v[\d.]+)?\s+feature\s+"([^"]+)"', frest)
         if fm:
             dep_name = fm.group(1)
             feat_name = fm.group(2)
