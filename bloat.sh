@@ -222,13 +222,15 @@ BLOATY_REPORT="${OUTPUT_DIR}/bloat-report.txt"
 # After --remap-path-prefix, paths look like:
 #   =.cargo/registry/src/<hash>/ring-0.17.0/src/lib.rs
 #   =.bloat-src/easytier/src/lib.rs
+#   =.cargo/registry/src/<hash>/zstd-sys-2.0.13+zstd.1.5.6/zstd/lib/compress/zstd_lazy.c
+#   easytier/src/easytier-core.rs/@/easytier_core.95fd1469c661508c-cgu.0
 #   rustc/<hash>/library/std/src/lib.rs
-# We extract the crate name (e.g. "ring", "easytier", "std") from these.
+# We extract the crate name (e.g. "ring", "easytier", "zstd-sys") from these.
 python3 -c '
 import re, sys
 
 def extract_crate_name(path):
-    # Pattern: .../<crate>-<version>/src/...
+    # Pattern 1: .../<crate>-<version>/src/... (Rust registry crate)
     # e.g. .../ring-0.17.0/src/lib.rs -> ring
     #       .../serde_json-1.0.0/src/... -> serde_json
     m = re.search(r"/([^/]+-\d[^/]*?)/src/", path)
@@ -236,18 +238,28 @@ def extract_crate_name(path):
         name_ver = m.group(1)
         parts = re.split(r"-(?=\d)", name_ver, 1)
         return parts[0] if parts else name_ver
-    # Pattern: git checkout path with commit hash in directory
-    # e.g. .cargo/git/checkouts/kcp-sys-44d9a24c/9496479/kcp_sys/src/lib.rs -> kcp_sys
-    #       .cargo/git/checkouts/<name>-<hash>/<commit>/<name>/src/...
+    # Pattern 2: .../<name>/src/... (git dep, rustc std, workspace member)
+    # e.g. .cargo/git/checkouts/.../9496479/kcp_sys/src/lib.rs -> kcp_sys
+    #       rustc/<hash>/library/std/src/lib.rs -> std
     m = re.search(r"/([^/]+)/src/", path)
     if m:
         return m.group(1)
-    # Fallback: return last path segment stripped of -cgu.N suffix and hash
+    # Pattern 3: Rust LTO symbol remapping @/ separator
+    # e.g. easytier/src/easytier-core.rs/@/easytier_core.95fd1469c661508c-cgu.0 -> easytier_core
+    m = re.search(r"/@/([^.]+)", path)
+    if m:
+        return m.group(1)
+    # Pattern 4: C/C++ source in -sys crate directory (no /src/ sub-path)
+    # e.g. .../zstd-sys-2.0.13+zstd.1.5.6/zstd/lib/compress/zstd_lazy.c -> zstd-sys
+    #       .../libz-sys-1.1.20/libz/... -> libz-sys
+    for seg in path.split("/"):
+        if re.match(r"^[a-z][a-z0-9_]+-\d", seg):
+            parts = re.split(r"-(?=\d)", seg, 1)
+            return parts[0] if parts else seg
+    # Fallback: strip -cgu.N and .hash suffix from last path segment
     # e.g. easytier_core.95fd1469c661508c-cgu.0 -> easytier_core
     last = path.rstrip("/").rsplit("/", 1)[-1]
-    # Strip -cgu.N suffix
     last = re.sub(r"-cgu\.\d+$", "", last)
-    # Strip leading .hash suffix (symbol hash like .95fd1469c661508c)
     last = re.sub(r"\.[0-9a-f]{16,}$", "", last)
     if last:
         return last
@@ -336,14 +348,25 @@ def fmt(b):
     return f"{b:.0f}B"
 
 def extract_crate_name(path):
+    # Pattern 1: .../<crate>-<version>/src/...
     m = re.search(r'([^/]+-\d[^/]*?)/src/', path)
     if m:
         nv = m.group(1)
         parts = re.split(r'-(?=\d)', nv, 1)
         return parts[0] if parts else nv
+    # Pattern 2: .../<name>/src/...
     m = re.search(r'/([^/]+)/src/', path)
     if m:
         return m.group(1)
+    # Pattern 3: Rust LTO @/ symbol remapping
+    m = re.search(r'/@/([^.]+)', path)
+    if m:
+        return m.group(1)
+    # Pattern 4: C/C++ source in -sys crate directory
+    for seg in path.split('/'):
+        if re.match(r'^[a-z][a-z0-9_]+-\d', seg):
+            parts = re.split(r'-(?=\d)', seg, 1)
+            return parts[0] if parts else seg
     # Fallback: strip -cgu.N and .hash suffix
     last = path.rstrip('/').rsplit('/', 1)[-1]
     last = re.sub(r'-cgu\.\d+$', '', last)
