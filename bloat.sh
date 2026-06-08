@@ -388,36 +388,44 @@ buf1.write('\n')
 with open(os.path.join(output_dir, 'inclusive-size-report.txt'), 'w') as f:
     f.write(buf1.getvalue())
 
-# --- Output 2: Dependency Chains ---
-# For each bloaty-identified crate, show its dependency tree.
-# Limit depth to 3 levels to avoid excessive output.
+# --- Output 2: Reverse Dependency Chains ---
+# Show who depends on each bloaty-identified crate (branch/trunk view).
+# Build a reverse graph and traverse upward from each bloaty crate.
+# Only bloaty-identified crates are expanded; others are collapsed.
 buf2 = io.StringIO()
-buf2.write("Dependency Chains (bloaty-identified crates)\n")
-buf2.write(f"Showing dependency trees for {len(self_sizes)} crates visible to bloaty\n")
-buf2.write("Depth limit: 3 levels\n")
+buf2.write("Reverse Dependency Chains (who depends on each crate)\n")
+buf2.write(f"Showing {len(self_sizes)} crates visible to bloaty\n")
+buf2.write("Only bloaty-identified crates are expanded; others are collapsed\n")
 buf2.write("\n")
 
-MAX_DEPTH = 3
+# Build reverse graph: {crate: set(crates that depend on it)}
+reverse_graph = {}
+for crate, deps in graph.items():
+    for dep in deps:
+        reverse_graph.setdefault(dep, set()).add(crate)
 
-def print_tree(buf, crate, depth, visited, prefix=""):
-    if depth >= MAX_DEPTH:
-        return
+def print_reverse_tree(buf, crate, visited, prefix=""):
+    """Print reverse tree: who depends on this crate, going up."""
     visited.add(crate)
-    deps = graph.get(crate, [])
-    for i, dep in enumerate(deps):
-        is_last = (i == len(deps) - 1)
+    parents = reverse_graph.get(crate, set())
+    bloaty_parents = sorted([p for p in parents if p in self_sizes and p not in visited])
+    other_count = len(parents) - len([p for p in parents if p in self_sizes])
+    for i, parent in enumerate(bloaty_parents):
+        is_last = (i == len(bloaty_parents) - 1) and other_count == 0
         connector = "\u2514\u2500\u2500 " if is_last else "\u251c\u2500\u2500 "
-        marker = ""
-        if dep in self_sizes:
-            marker = f" [bloaty: {fmt(self_sizes[dep])}]"
-        buf.write(f"{prefix}{connector}{dep}{marker}\n")
-        if dep not in visited and depth + 1 < MAX_DEPTH:
+        buf.write(f"{prefix}{connector}{parent} [bloaty: {fmt(self_sizes[parent])}]\n")
+        if parent not in visited:
             extension = "    " if is_last else "\u2502   "
-            print_tree(buf, dep, depth + 1, visited, prefix + extension)
+            print_reverse_tree(buf, parent, visited, prefix + extension)
+    if other_count > 0:
+        connector = "\u2514\u2500\u2500 "
+        buf.write(f"{prefix}{connector}+ {other_count} other dependents (not visible to bloaty)\n")
 
 for name, inc, nd in rows:
-    buf2.write(f"{name}  [inclusive: {fmt(inc)}, direct deps: {nd}]\n")
-    print_tree(buf2, name, 0, set())
+    total_parents = len(reverse_graph.get(name, set()))
+    buf2.write(f"{name}  [self: {fmt(self_sizes[name])}, inclusive: {fmt(inc)}, "
+               f"used by {total_parents} crates]\n")
+    print_reverse_tree(buf2, name, set())
     buf2.write("\n")
 
 with open(os.path.join(output_dir, 'dependency-chains.txt'), 'w') as f:
@@ -492,7 +500,7 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     cat "$INCLUSIVE_REPORT" 2>/dev/null || echo "(empty)"
     echo '```'
     echo ""
-    echo "### Dependency Chains"
+    echo "### Reverse Dependency Chains"
     echo '```'
     cat "$DEP_CHAINS_REPORT" 2>/dev/null || echo "(empty)"
     echo '```'
