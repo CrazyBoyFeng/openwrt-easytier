@@ -291,7 +291,7 @@ head -5 "$BLOATY_REPORT" 2>/dev/null
 CARGO_TREE="${OUTPUT_DIR}/cargo-tree.txt"
 echo ""
 echo "  Generating dependency tree (cargo tree -p easytier, lite features)..."
-if cargo tree --locked -p easytier \
+if cargo tree -p easytier \
     --manifest-path "${SRC_DIR}/Cargo.toml" \
     --no-default-features --features "$LITE_FEATURES" \
     --charset utf-8 \
@@ -299,6 +299,8 @@ if cargo tree --locked -p easytier \
   echo "  cargo-tree.txt: $(wc -l < "$CARGO_TREE") lines"
 else
   echo "  WARNING: cargo tree failed (exit $?), dependency chains will be skipped"
+  echo "  cargo tree error output:"
+  cat "$CARGO_TREE"
   rm -f "$CARGO_TREE"
 fi
 
