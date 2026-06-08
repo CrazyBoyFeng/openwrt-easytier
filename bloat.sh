@@ -262,25 +262,44 @@ echo "  bloat-report.txt: $(wc -l < "$BLOATY_REPORT" 2>/dev/null || echo '0') li
 echo "  First 5 lines:"
 head -5 "$BLOATY_REPORT" 2>/dev/null
 
+# ===================== Generate dependency tree =====================
+# Use cargo tree to get the feature-aware dependency graph for the lite build.
+# This is scoped to the easytier package with the exact features used during
+# compilation, automatically excluding other workspace members and
+# feature-gated dependencies that aren't part of the lite build.
+CARGO_TREE="${OUTPUT_DIR}/cargo-tree.txt"
+echo ""
+echo "  Generating dependency tree (cargo tree -p easytier, lite features)..."
+if cargo tree --locked -p easytier \
+    --manifest-path "${SRC_DIR}/Cargo.toml" \
+    --no-default-features --features "$LITE_FEATURES" \
+    --charset utf-8 \
+    > "$CARGO_TREE" 2>&1; then
+  echo "  cargo-tree.txt: $(wc -l < "$CARGO_TREE") lines"
+else
+  echo "  WARNING: cargo tree failed (exit $?), dependency chains will be skipped"
+  rm -f "$CARGO_TREE"
+fi
+
 # ===================== Inclusive size + dependency chain analysis =====================
-# Combine bloaty per-crate self sizes with Cargo.lock dependency tree
-# to compute inclusive sizes and show dependency chains.
+# Combine bloaty per-crate self sizes with cargo tree dependency graph
+# to compute inclusive sizes and show reverse dependency chains.
 INCLUSIVE_REPORT="${OUTPUT_DIR}/inclusive-size-report.txt"
 DEP_CHAINS_REPORT="${OUTPUT_DIR}/dependency-chains.txt"
-LOCKFILE="${SRC_DIR}/Cargo.lock"
 
 echo ""
 echo "  Computing inclusive sizes and dependency chains..."
 
-if [[ ! -f "$LOCKFILE" ]]; then
-  echo "  WARNING: Cargo.lock not found at ${LOCKFILE}, skipping analysis"
-  echo "(no Cargo.lock)" > "$INCLUSIVE_REPORT"
-  echo "(no Cargo.lock)" > "$DEP_CHAINS_REPORT"
+if [[ ! -f "$CARGO_TREE" ]]; then
+  echo "  WARNING: cargo tree not available, skipping analysis"
+  echo "(no cargo tree)" > "$INCLUSIVE_REPORT"
+  echo "(no cargo tree)" > "$DEP_CHAINS_REPORT"
 else
   # bloaty format per line: FILE_PCT FILE_SIZE VM_PCT VM_SIZE COMPILE_UNIT_PATH
-  # Cargo.lock has [[package]] entries with name + dependencies.
-  # We parse both with Python, compute recursive sizes, and output a
-  # table sorted by inclusive VM size descending.
+  # cargo tree output is a tree of package names scoped to easytier's
+  # dependency graph with the exact lite features.  We parse both with
+  # Python, compute recursive sizes, and output a table sorted by
+  # inclusive VM size descending.
   # Write the Python analysis script to a temp file, then execute.
   # This avoids heredoc redirection issues in CI environments.
   PY_SCRIPT=$(mktemp /tmp/bloat-analysis-XXXXXX.py)
@@ -291,12 +310,7 @@ import re, os, sys, io
 
 src_dir = os.environ.get('SRC_DIR', '.')
 bloaty_raw = os.environ.get('BLOATY_RAW', '')
-lockfile = os.path.join(src_dir, 'Cargo.lock')
-
-try:
-    import tomllib
-except ImportError:
-    import tomli as tomllib
+cargo_tree_file = os.environ.get('CARGO_TREE', '')
 
 def parse_size(s):
     s = s.strip()
@@ -321,44 +335,47 @@ def extract_crate_name(path):
     m = re.search(r'/([^/]+)/src/', path)
     return m.group(1) if m else path
 
-# Parse Cargo.lock
-with open(lockfile, 'rb') as f:
-    data = tomllib.load(f)
-
-# Build dependency graph: {crate_name: [direct_dep_names]}
+# Build dependency graph from cargo tree output
+# cargo tree output format (UTF-8):
+#   easytier v0.1.0 (path+...)
+#   ├── dep_a v1.0.0
+#   │   ├── dep_c v1.0.0
+#   │   └── dep_d v1.0.0
+#   └── dep_b v1.0.0
+# Parse by tracking depth via tree connector position (├/└).
+# This is feature-aware and scoped to easytier — no other workspace members.
 graph = {}
-for pkg in data.get('package', []):
-    name = pkg['name']
-    deps = []
-    for d in pkg.get('dependencies', []):
-        deps.append(re.split(r'[\s/?]', d)[0])
-    graph[name] = deps
+with open(cargo_tree_file) as f:
+    lines = f.read().strip().split('\n')
 
-# Filter to only crates reachable from 'easytier' (the crate that produces
-# easytier-core). Cargo.lock includes all workspace members (easytier-android-jni,
-# easytier-ffi, easytier-gui, etc.) which are not part of our binary's dependency
-# tree and should not appear in dependency chains.
-def reachable_from(root):
-    visited = set()
-    stack = [root]
-    while stack:
-        c = stack.pop()
-        if c in visited:
-            continue
-        visited.add(c)
-        for dep in graph.get(c, []):
-            if dep not in visited:
-                stack.append(dep)
-    return visited
+stack = []  # [(depth, crate_name)]
+for line in lines:
+    line = line.rstrip()
+    if not line:
+        continue
+    # Find position of tree connector (├ or └)
+    idx = -1
+    for i, ch in enumerate(line):
+        if ch in ('\u251c', '\u2514'):
+            idx = i
+            break
+    if idx == -1:
+        # Root line (no tree connector)
+        name = re.match(r'(\S+)', line).group(1)
+        graph[name] = []
+        stack = [(0, name)]
+        continue
+    depth = idx // 4 + 1
+    rest = line[idx + 3:]
+    name = re.match(r'(\S+)', rest).group(1)
+    while len(stack) > 1 and stack[-1][0] >= depth:
+        stack.pop()
+    parent = stack[-1][1]
+    graph.setdefault(parent, []).append(name)
+    graph.setdefault(name, [])
+    stack.append((depth, name))
 
-reachable = reachable_from('easytier')
-unreachable = [c for c in graph if c not in reachable]
-if unreachable:
-    # Remove unreachable crates from the graph
-    for c in unreachable:
-        del graph[c]
-    print(f"  Filtered out {len(unreachable)} crates not reachable from easytier (e.g. {', '.join(sorted(unreachable)[:5])}{'...' if len(unreachable) > 5 else ''})")
-print(f"  Dependency graph: {len(graph)} crates reachable from easytier")
+print(f"  Dependency graph: {len(graph)} crates (from cargo tree, easytier with lite features)")
 
 # Parse bloaty raw output: {crate_name: vm_size_bytes}
 self_sizes = {}
@@ -403,7 +420,7 @@ output_dir = os.environ.get('OUTPUT_DIR', '.')
 buf1 = io.StringIO()
 buf1.write("Inclusive Size Analysis (VM Size)\n")
 buf1.write(f"Per-crate self sizes total: {fmt(sum(self_sizes.values()))} ({len(self_sizes)} crates)\n")
-buf1.write(f"Dependency graph: {len(graph)} crates from Cargo.lock (reachable from easytier)\n")
+buf1.write(f"Dependency graph: {len(graph)} crates from cargo tree (easytier with lite features)\n")
 buf1.write("\n")
 buf1.write(f"{'Crate':<35} {'Inclusive VM Size':>18} {'Direct Deps':>12}\n")
 buf1.write('-' * 67)
@@ -416,12 +433,12 @@ with open(os.path.join(output_dir, 'inclusive-size-report.txt'), 'w') as f:
 
 # --- Output 2: Reverse Dependency Chains ---
 # Show who depends on each bloaty-identified crate (branch/trunk view).
-# Build a reverse graph from Cargo.lock and traverse upward.
+# Build a reverse graph from cargo tree and traverse upward.
 # All dependents are shown; bloaty-identified ones are annotated with size.
 buf2 = io.StringIO()
 buf2.write("Reverse Dependency Chains (who depends on each crate)\n")
 buf2.write(f"Showing {len(self_sizes)} crates visible to bloaty\n")
-buf2.write(f"Reverse dependency graph built from Cargo.lock ({len(graph)} crates)\n")
+buf2.write(f"Reverse dependency graph from cargo tree ({len(graph)} crates)\n")
 buf2.write("\n")
 
 # Build reverse graph: {crate: set(crates that depend on it)}
@@ -457,7 +474,7 @@ with open(os.path.join(output_dir, 'dependency-chains.txt'), 'w') as f:
 print("  Analysis complete.")
 PYEOF
 
-  SRC_DIR="$SRC_DIR" BLOATY_RAW="$BLOATY_RAW" OUTPUT_DIR="$OUTPUT_DIR" \
+  SRC_DIR="$SRC_DIR" BLOATY_RAW="$BLOATY_RAW" OUTPUT_DIR="$OUTPUT_DIR" CARGO_TREE="${CARGO_TREE:-}" \
     python3 "$PY_SCRIPT"
 
   echo "  inclusive-size-report.txt: $(wc -l < "$INCLUSIVE_REPORT" 2>/dev/null || echo '0') lines"
