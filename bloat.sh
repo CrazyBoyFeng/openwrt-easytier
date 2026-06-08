@@ -294,7 +294,7 @@ echo "  Generating dependency tree (cargo tree -p easytier, lite features)..."
 if cargo tree -p easytier \
     --manifest-path "${SRC_DIR}/Cargo.toml" \
     --no-default-features --features "$LITE_FEATURES" \
-    --charset utf-8 \
+    --charset utf8 \
     > "$CARGO_TREE" 2>&1; then
   echo "  cargo-tree.txt: $(wc -l < "$CARGO_TREE") lines"
 else
