@@ -465,8 +465,10 @@ for line in lines:
             idx = i
             break
     if idx == -1:
-        # Root line (no tree connector)
-        m = re.match(r'(\S+)', line)
+        # Root line (no tree connector) — must look like a crate name
+        # e.g. "easytier v2.6.4 (path+...)"
+        # Skip cargo download/status messages that lack tree connectors
+        m = re.match(r'([a-zA-Z][\w-]*)\s+v', line)
         if not m:
             continue
         name = m.group(1)
@@ -476,7 +478,7 @@ for line in lines:
     # Depth = number of │ characters before the connector + 1
     depth = line[:idx].count('\u2502') + 1
     rest = line[idx + 3:]
-    m = re.match(r'(\S+)', rest)
+    m = re.match(r'\s*(\S+)', rest)
     if not m:
         continue
     name = m.group(1)
