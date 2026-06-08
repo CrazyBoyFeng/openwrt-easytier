@@ -215,6 +215,52 @@ BLOATY_REPORT="${OUTPUT_DIR}/bloat-report.txt"
   > "$BLOATY_RAW" 2>&1 \
   || { echo "ERROR: bloaty failed (exit $?)" >&2; exit 1; }
 
+# ===================== Generate dependency tree (early) =====================
+# Cargo tree is needed before post-processing bloaty output so we can
+# build a C-library-prefix -> -sys-crate mapping for paths like
+#   zstd/lib/compress/zstd_lazy.c  ->  zstd-sys
+# where the C compiler records only a relative path in DWARF.
+CARGO_TREE="${OUTPUT_DIR}/cargo-tree.txt"
+echo ""
+echo "  Generating dependency tree (cargo tree -p easytier, lite features)..."
+if cargo tree -p easytier \
+    --manifest-path "${SRC_DIR}/Cargo.toml" \
+    --no-default-features --features "$LITE_FEATURES" \
+    --charset utf8 \
+    > "$CARGO_TREE" 2>&1; then
+  echo "  cargo-tree.txt: $(wc -l < "$CARGO_TREE") lines"
+else
+  echo "  WARNING: cargo tree failed (exit $?), dependency chains will be skipped"
+  echo "  cargo tree error output:"
+  cat "$CARGO_TREE"
+  rm -f "$CARGO_TREE"
+fi
+
+# Build C-library-prefix -> -sys-crate mapping from cargo tree.
+# e.g. zstd -> zstd-sys,  kcp -> kcp-sys
+# This handles C source paths recorded by cc/gcc in DWARF as relative
+# paths (e.g. zstd/lib/compress/zstd_lazy.c) without registry prefix.
+C_PREFIX_MAP=""
+if [[ -f "$CARGO_TREE" ]]; then
+  C_PREFIX_MAP=$(python3 -c '
+import re, sys
+crates = set()
+with open(sys.argv[1]) as f:
+    for line in f:
+        m = re.match(r"\s*(?:[\u251c\u2514\u2502\u2500 ]+)?(\S+)", line)
+        if m:
+            crates.add(m.group(1))
+mapping = {}
+for c in crates:
+    idx = c.find("-sys")
+    if idx > 0:
+        prefix = c[:idx]
+        mapping[prefix] = c
+import json
+print(json.dumps(mapping))
+' "$CARGO_TREE")
+fi
+
 # Post-process: replace DWARF compile unit file paths with clean crate names.
 # Also filter out debug section lines ([section .debug_*]) which have
 # 0 VM size and are not real code — they are DWARF metadata sections.
@@ -225,9 +271,17 @@ BLOATY_REPORT="${OUTPUT_DIR}/bloat-report.txt"
 #   =.cargo/registry/src/<hash>/zstd-sys-2.0.13+zstd.1.5.6/zstd/lib/compress/zstd_lazy.c
 #   easytier/src/easytier-core.rs/@/easytier_core.95fd1469c661508c-cgu.0
 #   rustc/<hash>/library/std/src/lib.rs
+#   zstd/lib/compress/zstd_lazy.c  (C source, relative path from cc crate)
 # We extract the crate name (e.g. "ring", "easytier", "zstd-sys") from these.
 python3 -c '
-import re, sys
+import re, sys, json
+
+# Load C library prefix -> -sys crate name mapping from cargo tree
+c_prefix_map = {}
+try:
+    c_prefix_map = json.loads(sys.argv[1]) if sys.argv[1] else {}
+except (json.JSONDecodeError, IndexError):
+    pass
 
 def extract_crate_name(path):
     # Pattern 1: .../<crate>-<version>/src/... (Rust registry crate)
@@ -257,13 +311,21 @@ def extract_crate_name(path):
     m = re.search(r"/@/([^.]+)", path)
     if m:
         return m.group(1)
-    # Pattern 4: C/C++ source in -sys crate directory (no /src/ sub-path)
+    # Pattern 4: C/C++ source in -sys crate directory (has crate-version in path)
     # e.g. .../zstd-sys-2.0.13+zstd.1.5.6/zstd/lib/compress/zstd_lazy.c -> zstd-sys
     #       .../libz-sys-1.1.20/libz/... -> libz-sys
     for seg in path.split("/"):
         if re.match(r"^[a-z][a-z0-9_]+-\d", seg):
             parts = re.split(r"-(?=\d)", seg, 1)
             return parts[0] if parts else seg
+    # Pattern 5: C source with relative path (no registry prefix)
+    # e.g. zstd/lib/compress/zstd_lazy.c -> zstd-sys
+    #       kcp/src/... -> kcp-sys
+    # The C compiler (via cc crate) records relative paths in DWARF.
+    # Match first path segment against the C prefix map from cargo tree.
+    first_seg = path.split("/")[0] if path else ""
+    if first_seg in c_prefix_map:
+        return c_prefix_map[first_seg]
     # Fallback: strip -cgu.N and .hash suffix from last path segment
     # e.g. easytier_core.95fd1469c661508c-cgu.0 -> easytier_core
     last = path.rstrip("/").rsplit("/", 1)[-1]
@@ -279,42 +341,23 @@ for line in sys.stdin:
     if re.search(r"\[section \.debug_", stripped):
         continue
     # Replace file paths with clean crate names
-    m = re.search(r"(\S+/src/\S+)", stripped)
+    # Match paths ending with .ext (covers /src/ paths and C source paths)
+    m = re.search(r"(\S+\.\w+)$", stripped)
     if m:
         path = m.group(1)
         crate_name = extract_crate_name(path)
-        stripped = stripped[:m.start()] + crate_name + stripped[m.end():]
+        if crate_name != path:
+            stripped = stripped[:m.start()] + crate_name + stripped[m.end():]
     print(stripped)
-' < "$BLOATY_RAW" > "$BLOATY_REPORT"
+' "$C_PREFIX_MAP" < "$BLOATY_RAW" > "$BLOATY_REPORT"
 
 echo "  bloat-report.txt: $(wc -l < "$BLOATY_REPORT" 2>/dev/null || echo '0') lines"
 echo "  First 5 lines:"
 head -5 "$BLOATY_REPORT" 2>/dev/null
 
-# ===================== Generate dependency tree =====================
-# Use cargo tree to get the feature-aware dependency graph for the lite build.
-# This is scoped to the easytier package with the exact features used during
-# compilation, automatically excluding other workspace members and
-# feature-gated dependencies that aren't part of the lite build.
-CARGO_TREE="${OUTPUT_DIR}/cargo-tree.txt"
-echo ""
-echo "  Generating dependency tree (cargo tree -p easytier, lite features)..."
-if cargo tree -p easytier \
-    --manifest-path "${SRC_DIR}/Cargo.toml" \
-    --no-default-features --features "$LITE_FEATURES" \
-    --charset utf8 \
-    > "$CARGO_TREE" 2>&1; then
-  echo "  cargo-tree.txt: $(wc -l < "$CARGO_TREE") lines"
-else
-  echo "  WARNING: cargo tree failed (exit $?), dependency chains will be skipped"
-  echo "  cargo tree error output:"
-  cat "$CARGO_TREE"
-  rm -f "$CARGO_TREE"
-fi
-
 # ===================== Inclusive size + dependency chain analysis =====================
-# Combine bloaty per-crate self sizes with cargo tree dependency graph
-# to compute inclusive sizes and show reverse dependency chains.
+# Cargo tree was already generated above (needed for C prefix mapping).
+# Use it here to compute inclusive sizes and reverse dependency chains.
 INCLUSIVE_REPORT="${OUTPUT_DIR}/inclusive-size-report.txt"
 DEP_CHAINS_REPORT="${OUTPUT_DIR}/dependency-chains.txt"
 
@@ -379,11 +422,18 @@ def extract_crate_name(path):
     m = re.search(r'/@/([^.]+)', path)
     if m:
         return m.group(1)
-    # Pattern 4: C/C++ source in -sys crate directory
+    # Pattern 4: C/C++ source in -sys crate directory (has crate-version in path)
     for seg in path.split('/'):
         if re.match(r'^[a-z][a-z0-9_]+-\d', seg):
             parts = re.split(r'-(?=\d)', seg, 1)
             return parts[0] if parts else seg
+    # Pattern 5: C source with relative path (no registry prefix)
+    # e.g. zstd/lib/compress/zstd_lazy.c -> zstd-sys
+    # The C compiler (via cc crate) records relative paths in DWARF.
+    # Match first path segment against the C prefix map from cargo tree.
+    first_seg = path.split('/')[0] if path else ''
+    if first_seg in c_prefix_map:
+        return c_prefix_map[first_seg]
     # Fallback: strip -cgu.N and .hash suffix
     last = path.rstrip('/').rsplit('/', 1)[-1]
     last = re.sub(r'-cgu\.\d+$', '', last)
@@ -441,6 +491,17 @@ for line in lines:
     stack.append((depth, name))
 
 print(f"  Dependency graph: {len(graph)} crates (from cargo tree, easytier with lite features)")
+
+# Build C library prefix -> -sys crate name mapping
+# e.g. zstd -> zstd-sys,  kcp -> kcp-sys
+# Used by Pattern 5 in extract_crate_name for C source relative paths.
+c_prefix_map = {}
+for c in graph:
+    idx = c.find('-sys')
+    if idx > 0:
+        prefix = c[:idx]
+        c_prefix_map[prefix] = c
+print(f"  C prefix map: {c_prefix_map}")
 
 # Parse bloaty raw output: {crate_name: vm_size_bytes}
 self_sizes = {}
