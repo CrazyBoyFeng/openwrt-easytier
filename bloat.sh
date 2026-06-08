@@ -389,34 +389,48 @@ with open(os.path.join(output_dir, 'inclusive-size-report.txt'), 'w') as f:
     f.write(buf1.getvalue())
 
 # --- Output 2: Dependency Chains ---
-# For each bloaty-identified crate, show its dependency tree.
-# Limit depth to 3 levels to avoid excessive output.
+# Show dependency relationships among bloaty-identified crates.
+# Only expand branches that lead to another bloaty-identified crate;
+# other deps are collapsed into a summary line to keep output compact.
 buf2 = io.StringIO()
 buf2.write("Dependency Chains (bloaty-identified crates)\n")
-buf2.write(f"Showing dependency trees for {len(self_sizes)} crates visible to bloaty\n")
-buf2.write("Depth limit: 3 levels\n")
+buf2.write(f"Showing {len(self_sizes)} crates visible to bloaty\n")
+buf2.write(f"Only bloaty-identified crates are expanded; others are collapsed\n")
 buf2.write("\n")
 
-MAX_DEPTH = 3
+def collect_bloaty_deps(crate, visited):
+    """Recursively collect bloaty-identified deps reachable from crate."""
+    if crate in visited:
+        return set()
+    visited.add(crate)
+    result = set()
+    for dep in graph.get(crate, []):
+        if dep in self_sizes:
+            result.add(dep)
+            result.update(collect_bloaty_deps(dep, visited))
+    return result
 
 def print_tree(buf, crate, depth, visited, prefix=""):
-    if depth >= MAX_DEPTH:
-        return
     visited.add(crate)
     deps = graph.get(crate, [])
-    for i, dep in enumerate(deps):
-        is_last = (i == len(deps) - 1)
+    bloaty_deps = [d for d in deps if d in self_sizes and d not in visited]
+    other_count = len(deps) - len(bloaty_deps)
+    for i, dep in enumerate(bloaty_deps):
+        is_last = (i == len(bloaty_deps) - 1) and other_count == 0
         connector = "\u2514\u2500\u2500 " if is_last else "\u251c\u2500\u2500 "
-        marker = ""
-        if dep in self_sizes:
-            marker = f" [bloaty: {fmt(self_sizes[dep])}]"
-        buf.write(f"{prefix}{connector}{dep}{marker}\n")
-        if dep not in visited and depth + 1 < MAX_DEPTH:
+        buf.write(f"{prefix}{connector}{dep} [bloaty: {fmt(self_sizes[dep])}]\n")
+        if dep not in visited:
             extension = "    " if is_last else "\u2502   "
             print_tree(buf, dep, depth + 1, visited, prefix + extension)
+    if other_count > 0:
+        connector = "\u2514\u2500\u2500 " if True else "\u251c\u2500\u2500 "
+        buf.write(f"{prefix}{connector}+ {other_count} other deps (not visible to bloaty)\n")
 
 for name, inc, nd in rows:
-    buf2.write(f"{name}  [inclusive: {fmt(inc)}, direct deps: {nd}]\n")
+    bloaty_reachable = collect_bloaty_deps(name, set())
+    total_deps = len(graph.get(name, []))
+    buf2.write(f"{name}  [inclusive: {fmt(inc)}, {total_deps} direct deps, "
+               f"{len(bloaty_reachable)} visible to bloaty]\n")
     print_tree(buf2, name, 0, set())
     buf2.write("\n")
 
