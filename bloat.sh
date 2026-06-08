@@ -404,12 +404,8 @@ for crate, deps in graph.items():
     for dep in deps:
         reverse_graph.setdefault(dep, set()).add(crate)
 
-MAX_DEPTH = 5
-
-def print_reverse_tree(buf, crate, depth, visited, prefix=""):
+def print_reverse_tree(buf, crate, visited, prefix=""):
     """Print reverse tree: who depends on this crate, going up."""
-    if depth >= MAX_DEPTH:
-        return
     visited.add(crate)
     parents = sorted(reverse_graph.get(crate, set()) - visited)
     for i, parent in enumerate(parents):
@@ -419,15 +415,14 @@ def print_reverse_tree(buf, crate, depth, visited, prefix=""):
         if parent in self_sizes:
             marker = f" [bloaty: {fmt(self_sizes[parent])}]"
         buf.write(f"{prefix}{connector}{parent}{marker}\n")
-        if depth + 1 < MAX_DEPTH:
-            extension = "    " if is_last else "\u2502   "
-            print_reverse_tree(buf, parent, depth + 1, visited, prefix + extension)
+        extension = "    " if is_last else "\u2502   "
+        print_reverse_tree(buf, parent, visited, prefix + extension)
 
 for name, inc, nd in rows:
     total_parents = len(reverse_graph.get(name, set()))
     buf2.write(f"{name}  [self: {fmt(self_sizes[name])}, inclusive: {fmt(inc)}, "
                f"used by {total_parents} crates]\n")
-    print_reverse_tree(buf2, name, 0, set())
+    print_reverse_tree(buf2, name, set())
     buf2.write("\n")
 
 with open(os.path.join(output_dir, 'dependency-chains.txt'), 'w') as f:
