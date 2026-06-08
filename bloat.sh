@@ -236,6 +236,24 @@ else
   rm -f "$CARGO_TREE"
 fi
 
+# Generate feature edges tree for reverse dependency chain annotations.
+# Shows which feature of each parent crate caused the dependency.
+# e.g. easytier's "kcp" feature -> kcp-sys
+CARGO_TREE_FEATURES="${OUTPUT_DIR}/cargo-tree-features.txt"
+if [[ -f "$CARGO_TREE" ]]; then
+  echo "  Generating feature edges tree (cargo tree --edges features)..."
+  if cargo tree -p easytier \
+      --manifest-path "${SRC_DIR}/Cargo.toml" \
+      --no-default-features --features "$LITE_FEATURES" \
+      --charset utf8 --edges features --prefix depth \
+      > "$CARGO_TREE_FEATURES" 2>&1; then
+    echo "  cargo-tree-features.txt: $(wc -l < "$CARGO_TREE_FEATURES") lines"
+  else
+    echo "  WARNING: cargo tree --edges features failed, feature annotations will be skipped"
+    rm -f "$CARGO_TREE_FEATURES"
+  fi
+fi
+
 # Build C-library-prefix -> -sys-crate mapping from cargo tree.
 # e.g. zstd -> zstd-sys,  kcp -> kcp-sys
 # This handles C source paths recorded by cc/gcc in DWARF as relative
@@ -505,6 +523,49 @@ for c in graph:
         c_prefix_map[prefix] = c
 print(f"  C prefix map: {c_prefix_map}")
 
+# Parse feature edges from cargo tree --edges features --prefix depth
+# Builds mapping: (parent_crate, dep_crate) -> set of feature names
+# Used to annotate reverse dependency chains with feature information.
+# e.g. ("easytier", "kcp-sys") -> {"kcp"}
+feature_map = {}
+cargo_tree_features_file = os.environ.get('CARGO_TREE_FEATURES', '')
+if cargo_tree_features_file and os.path.exists(cargo_tree_features_file):
+    with open(cargo_tree_features_file) as f:
+        feat_lines = f.read().strip().split('\n')
+    fstack = []  # [(depth, crate_name)]
+    for fline in feat_lines:
+        fline = fline.rstrip()
+        if not fline:
+            continue
+        # Parse depth prefix from --prefix depth format: "0 rest", "1 rest", etc.
+        dm = re.match(r'^(\d+)\s+(.*)', fline)
+        if not dm:
+            continue
+        fdepth = int(dm.group(1))
+        frest = dm.group(2)
+        # Detect feature edge: crate_name (optional version) feature="feat"
+        # e.g. "kcp-sys feature=\"kcp\"" or "kcp-sys v0.1.0 feature=\"kcp\""
+        fm = re.search(r'([a-zA-Z][\w-]*)(?:\s+v[\d.]+)?\s+feature="([^"]+)"', frest)
+        if fm:
+            dep_name = fm.group(1)
+            feat_name = fm.group(2)
+            # Find parent at depth-1 from stack
+            while fstack and fstack[-1][0] >= fdepth:
+                fstack.pop()
+            if fstack:
+                parent = fstack[-1][1]
+                feature_map.setdefault((parent, dep_name), set()).add(feat_name)
+            fstack.append((fdepth, dep_name))
+        else:
+            # Regular crate node (for tree structure tracking)
+            nm = re.match(r'([a-zA-Z][\w-]*)\s+v', frest)
+            if nm:
+                name = nm.group(1)
+                while fstack and fstack[-1][0] >= fdepth:
+                    fstack.pop()
+                fstack.append((fdepth, name))
+    print(f"  Feature map: {len(feature_map)} feature edges")
+
 # Parse bloaty raw output: {crate_name: vm_size_bytes}
 self_sizes = {}
 with open(bloaty_raw) as f:
@@ -589,7 +650,13 @@ def print_reverse_tree(buf, crate, visited, prefix=""):
         marker = ""
         if parent in self_sizes:
             marker = f" [bloaty: {fmt(self_sizes[parent])}]"
-        buf.write(f"{prefix}{connector}{parent}{marker}\n")
+        # Annotate with feature(s) that caused this dependency
+        features = feature_map.get((parent, crate))
+        if features:
+            feature_str = ",".join(sorted(features))
+            buf.write(f"{prefix}{connector}{parent}[{feature_str}]{marker}\n")
+        else:
+            buf.write(f"{prefix}{connector}{parent}{marker}\n")
         extension = "    " if is_last else "\u2502   "
         print_reverse_tree(buf, parent, visited, prefix + extension)
 
@@ -608,6 +675,7 @@ PYEOF
 
   SRC_DIR="$SRC_DIR" BLOATY_RAW="$BLOATY_RAW" OUTPUT_DIR="$OUTPUT_DIR" \
     CARGO_TREE="${CARGO_TREE:-}" \
+    CARGO_TREE_FEATURES="${CARGO_TREE_FEATURES:-}" \
     python3 "$PY_SCRIPT"
 
   echo "  inclusive-size-report.txt: $(wc -l < "$INCLUSIVE_REPORT" 2>/dev/null || echo '0') lines"
