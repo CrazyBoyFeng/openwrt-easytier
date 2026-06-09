@@ -143,15 +143,9 @@ export RUSTFLAGS := --remap-path-prefix="$(CURDIR)/=" --remap-path-prefix="$(PKG
 # Each variant builds its respective binary.
 # Each Build/Compile is a single line (no backslash continuation)
 # so that CI sed can target it via the EASYTIER_COMPILE_* markers.
-ifeq ($(BUILD_VARIANT),core)
 # EASYTIER_COMPILE_CORE
-Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core) && $(TARGET_CROSS)strip --remove-section=.eh_frame --remove-section=.eh_frame_hdr $(PKG_INSTALL_DIR)/bin/easytier-core
-endif
 
-ifeq ($(BUILD_VARIANT),cli)
 # EASYTIER_COMPILE_CLI
-Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-cli) && $(TARGET_CROSS)strip --remove-section=.eh_frame --remove-section=.eh_frame_hdr $(PKG_INSTALL_DIR)/bin/easytier-cli
-endif
 
 # Override Build/Prepare to handle case-sensitive directory name
 # mismatch.  The codeload tarball top-level directory is EasyTier-x.y.z
@@ -186,3 +180,19 @@ endef
 $(eval $(call RustBinPackage,easytier-core))
 $(eval $(call RustBinPackage,easytier-cli))
 $(eval $(call BuildPackage,easytier))
+
+# Override Build/Compile: EasyTier is a Cargo workspace,
+# so we must point cargo to the workspace member subdirectory.
+# BUILD_VARIANT is a target-specific variable set by RustBinPackage.
+# For the meta package (no BUILD_VARIANT), Build/Compile is empty.
+# EASYTIER_COMPILE_OVERRIDE
+Build/Compile=$(if $(BUILD_VARIANT),+$(CARGO_PKG_VARS) cargo install -v \
+	--profile $(CARGO_PKG_PROFILE) \
+	--root $(PKG_INSTALL_DIR) \
+	--path "$(PKG_BUILD_DIR)/easytier" \
+	--bin easytier-$(BUILD_VARIANT) \
+	$(if $(filter --jobserver%,$(PKG_JOBS)),,-j1) \
+	$(CARGO_PKG_ARGS) && \
+	$(TARGET_CROSS)strip --remove-section=.eh_frame --remove-section=.eh_frame_hdr \
+	$(PKG_INSTALL_DIR)/bin/easytier-$(BUILD_VARIANT),)
+# EASYTIER_COMPILE_OVERRIDE_END

@@ -229,6 +229,8 @@ run_step1() {
     echo "--- Injecting -Z build-std for tier-3 target ---"
     sed -i '/^# EASYTIER_COMPILE_CORE/{n;s|.*|Build/Compile=$(CARGO_PKG_VARS) cargo $(CARGO_PKG_ARGS) -Z build-std=std,panic_abort install -v --profile $(CARGO_PKG_PROFILE) --root $(PKG_INSTALL_DIR) --path "$(PKG_BUILD_DIR)/easytier" --bin easytier-core \&\& $(TARGET_CROSS)strip --remove-section=.eh_frame --remove-section=.eh_frame_hdr $(PKG_INSTALL_DIR)/bin/easytier-core|}' package/easytier/Makefile
     sed -i '/^# EASYTIER_COMPILE_CLI/{n;s|.*|Build/Compile=$(CARGO_PKG_VARS) cargo $(CARGO_PKG_ARGS) -Z build-std=std,panic_abort install -v --profile $(CARGO_PKG_PROFILE) --root $(PKG_INSTALL_DIR) --path "$(PKG_BUILD_DIR)/easytier" --bin easytier-cli \&\& $(TARGET_CROSS)strip --remove-section=.eh_frame --remove-section=.eh_frame_hdr $(PKG_INSTALL_DIR)/bin/easytier-cli|}' package/easytier/Makefile
+    # Remove default Build/Compile override (tier-3 uses the lines above)
+    sed -i '/^# EASYTIER_COMPILE_OVERRIDE/,/^# EASYTIER_COMPILE_OVERRIDE_END/d' package/easytier/Makefile
   fi
 
   # --- Configure & build ---
