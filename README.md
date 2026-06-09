@@ -12,6 +12,8 @@ EasyTier is a simple, decentralized and secure mesh VPN with WireGuard support, 
 | `easytier-cli` | CLI management tool (connects to core via RPC, can be remote) |
 | `easytier` | Meta package that installs both core and cli |
 
+> **Note:** Installing `easytier-cli` is optional. All EasyTier functionality works with `easytier-core` alone. If you want to monitor the running status, you can also connect from an `easytier-cli` or `easytier-gui` installed on another device via the RPC interface.
+
 ## Quick Start
 
 ```sh
