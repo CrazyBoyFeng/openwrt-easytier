@@ -105,7 +105,7 @@
  
  type Error = anyhow::Error;
  
-@@ -2972,81 +2915,6 @@
+@@ -2972,80 +2915,6 @@
          SubCommand::Node(sub_cmd) => {
              handler.handle_node(sub_cmd.sub_command.as_ref()).await?;
          }
@@ -183,7 +183,6 @@
 -                }
 -            }
 -        }
--        SubCommand::Proxy => {
+         SubCommand::Proxy => {
              let mut entries = vec![];
  
-             for client_type in &["tcp", "kcp_src", "kcp_dst", "quic_src", "quic_dst"] {
