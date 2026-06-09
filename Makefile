@@ -180,6 +180,7 @@ define Package/easytier-cli/install
 endef
 
 define Package/easytier/install
+	# meta package: no files to install
 endef
 
 $(eval $(call RustBinPackage,easytier-core))
