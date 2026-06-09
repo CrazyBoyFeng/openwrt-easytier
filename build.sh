@@ -234,8 +234,14 @@ run_step1() {
     build_std="-Z build-std=std,panic_abort"
   fi
 
-  printf 'CONFIG_PACKAGE_easytier-core=y\nCONFIG_PACKAGE_easytier-cli=y\n' >> .config
   make defconfig
+  # Enable easytier variant packages after defconfig.
+  # defconfig strips unknown CONFIG_PACKAGE_* options (easytier is a local
+  # package not installed via feeds), so we set them with scripts/config
+  # and re-run oldconfig to resolve dependencies.
+  ./scripts/config --set-val CONFIG_PACKAGE_easytier-core y
+  ./scripts/config --set-val CONFIG_PACKAGE_easytier-cli y
+  make oldconfig
 
   echo "--- Building packages ($SDK_NEW_FMT) ---"
   make package/easytier/compile V=s EASYTIER_BUILD_STD="$build_std" || \
@@ -320,8 +326,11 @@ run_step2() {
   cp -r "$WORKSPACE/files" package/easytier/
 
   # --- Configure & build ---
-  printf 'CONFIG_PACKAGE_easytier-core=y\nCONFIG_PACKAGE_easytier-cli=y\n' >> .config
   make defconfig
+  # Enable easytier variant packages after defconfig.
+  ./scripts/config --set-val CONFIG_PACKAGE_easytier-core y
+  ./scripts/config --set-val CONFIG_PACKAGE_easytier-cli y
+  make oldconfig
 
   echo "--- Building packages ($SDK_LEGACY_FMT) — prebuilt only ---"
   make package/easytier/compile V=s PREBUILT_DIR="$PREBUILT_DIR" || \
