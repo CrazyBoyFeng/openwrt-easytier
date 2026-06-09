@@ -46,10 +46,10 @@ include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk
 # Fix: filter out the conflicting profile keys, then append our preferred
 # values so that CARGO_PKG_VARS and our exports are consistent.
 CARGO_PKG_VARS := $(filter-out \
-        CARGO_PROFILE_RELEASE_LTO=% \
-        CARGO_PROFILE_RELEASE_OPT_LEVEL=% \
-        CARGO_PROFILE_RELEASE_PANIC=%, \
-        $(CARGO_PKG_VARS))
+	CARGO_PROFILE_RELEASE_LTO=% \
+	CARGO_PROFILE_RELEASE_OPT_LEVEL=% \
+	CARGO_PROFILE_RELEASE_PANIC=%, \
+	$(CARGO_PKG_VARS))
 
 CARGO_PKG_VARS += CARGO_PROFILE_RELEASE_LTO=fat
 CARGO_PKG_VARS += CARGO_PROFILE_RELEASE_OPT_LEVEL=z
@@ -159,24 +159,24 @@ endif
 # (based on PKG_NAME).  --strip-components=1 flattens the tarball so
 # source files land directly in PKG_BUILD_DIR.
 define Build/Prepare
-        rm -rf $(PKG_BUILD_DIR)
-        mkdir -p $(PKG_BUILD_DIR)
-        gzip -dc $(DL_DIR)/$(PKG_SOURCE) | tar -C $(PKG_BUILD_DIR) --strip-components=1 -xf -
-        $(Build/Patch/Default)
+	rm -rf $(PKG_BUILD_DIR)
+	mkdir -p $(PKG_BUILD_DIR)
+	gzip -dc $(DL_DIR)/$(PKG_SOURCE) | tar -C $(PKG_BUILD_DIR) --strip-components=1 -xf -
+	$(Build/Patch/Default)
 endef
 
 define Package/easytier-core/install
-        $(INSTALL_DIR) $(1)/usr/bin
-        $(INSTALL_BIN) $(PKG_INSTALL_DIR)/bin/easytier-core $(1)/usr/bin
-        $(INSTALL_DIR) $(1)/etc/config
-        $(INSTALL_CONF) ./files/etc/config/easytier $(1)/etc/config/easytier
-        $(INSTALL_DIR) $(1)/etc/init.d
-        $(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
+	$(INSTALL_DIR) $(1)/usr/bin
+	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/bin/easytier-core $(1)/usr/bin
+	$(INSTALL_DIR) $(1)/etc/config
+	$(INSTALL_CONF) ./files/etc/config/easytier $(1)/etc/config/easytier
+	$(INSTALL_DIR) $(1)/etc/init.d
+	$(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
 endef
 
 define Package/easytier-cli/install
-        $(INSTALL_DIR) $(1)/usr/bin
-        $(INSTALL_BIN) $(PKG_INSTALL_DIR)/bin/easytier-cli $(1)/usr/bin
+	$(INSTALL_DIR) $(1)/usr/bin
+	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/bin/easytier-cli $(1)/usr/bin
 endef
 
 define Package/easytier/install
