@@ -3,7 +3,7 @@
 # Copyright (C) 2025 CrazyBoyFeng
 #
 # Legacy Makefile for OpenWrt 23.05.x SDK.
-# This Makefile packages prebuilt easytier-core binaries into .ipk files.
+# This Makefile packages prebuilt easytier binaries into .ipk files.
 # It does NOT compile Rust — binaries must be pre-compiled by the
 # 25.12.4 CI step and placed in PREBUILT_DIR before this Makefile is used.
 #
@@ -21,30 +21,76 @@ PKG_LICENSE:=Apache-2.0
 
 include $(INCLUDE_DIR)/package.mk
 
-# ============ easytier ============
+# ============ easytier-core ============
+define Package/easytier-core
+  SECTION:=net
+  CATEGORY:=Network
+  SUBMENU:=VPN
+  TITLE:=EasyTier P2P Mesh VPN (core daemon)
+  URL:=https://github.com/EasyTier/EasyTier
+  DEPENDS:=+kmod-tun
+  VARIANT:=core
+  DEFAULT_VARIANT:=1
+endef
+
+define Package/easytier-core/description
+  EasyTier is a simple, decentralized and secure mesh VPN
+  with WireGuard support. It connects your devices into a
+  single virtual LAN, even behind NAT.
+  .
+  This package contains the easytier-core daemon binary,
+  init script and UCI configuration.
+endef
+
+# ============ easytier-cli ============
+define Package/easytier-cli
+  SECTION:=net
+  CATEGORY:=Network
+  SUBMENU:=VPN
+  TITLE:=EasyTier CLI management tool
+  URL:=https://github.com/EasyTier/EasyTier
+  DEPENDS:=+easytier-core
+  VARIANT:=cli
+endef
+
+define Package/easytier-cli/description
+  Command-line management tool for EasyTier.
+  Connects to easytier-core via RPC to view status and
+  manage the running daemon. Can connect to a remote
+  easytier-core instance.
+endef
+
+# ============ easytier (meta) ============
 define Package/easytier
   SECTION:=net
   CATEGORY:=Network
   SUBMENU:=VPN
-  TITLE:=EasyTier P2P Mesh VPN
+  TITLE:=EasyTier P2P Mesh VPN (meta package)
   URL:=https://github.com/EasyTier/EasyTier
-  DEPENDS:=+kmod-tun
+  DEPENDS:=+easytier-core +easytier-cli
 endef
 
 define Package/easytier/description
   EasyTier is a simple, decentralized and secure mesh VPN
   with WireGuard support. It connects your devices into a
   single virtual LAN, even behind NAT.
+  .
+  This meta package installs both easytier-core and easytier-cli.
 endef
 
 # ============ Build/Compile ============
 # Copy prebuilt binary from PREBUILT_DIR (set by CI).
 # Single line (no define/endef) for sed-friendliness.
 # EASYTIER_COMPILE
-Build/Compile=mkdir -p $(PKG_INSTALL_DIR)/bin && $(CP) $(PREBUILT_DIR)/default/easytier-core $(PKG_INSTALL_DIR)/bin/
+ifeq ($(BUILD_VARIANT),core)
+Build/Compile=mkdir -p $(PKG_INSTALL_DIR)/bin && $(CP) $(PREBUILT_DIR)/easytier-core $(PKG_INSTALL_DIR)/bin/
+endif
+ifeq ($(BUILD_VARIANT),cli)
+Build/Compile=mkdir -p $(PKG_INSTALL_DIR)/bin && $(CP) $(PREBUILT_DIR)/easytier-cli $(PKG_INSTALL_DIR)/bin/
+endif
 
 # ============ Install ============
-define Package/easytier/install
+define Package/easytier-core/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/bin/easytier-core $(1)/usr/bin/
 	$(INSTALL_DIR) $(1)/etc/config
@@ -53,4 +99,11 @@ define Package/easytier/install
 	$(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
 endef
 
+define Package/easytier-cli/install
+	$(INSTALL_DIR) $(1)/usr/bin
+	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/bin/easytier-cli $(1)/usr/bin/
+endef
+
+$(eval $(call BuildPackage,easytier-core))
+$(eval $(call BuildPackage,easytier-cli))
 $(eval $(call BuildPackage,easytier))

@@ -223,15 +223,16 @@ run_step1() {
   sed -i 's|PROTOC=\$(STAGING_DIR_HOSTPKG)/bin/protoc|PROTOC=/usr/bin/protoc|' \
     package/easytier/Makefile
 
-  # For tier-3 targets (mipsel), replace the Build/Compile line with
-  # -Zbuild-std variant.  Anchors on EASYTIER_COMPILE comment marker.
+  # For tier-3 targets (mipsel), replace the Build/Compile lines with
+  # -Zbuild-std variants.  Anchors on EASYTIER_COMPILE_* comment markers.
   if [[ "$SLUG" == "ramips-mt7621" ]]; then
     echo "--- Injecting -Z build-std for tier-3 target ---"
-    sed -i '/^# EASYTIER_COMPILE/{n;s|.*|Build/Compile=$(CARGO_PKG_VARS) cargo $(CARGO_PKG_ARGS) -Z build-std=std,panic_abort install -v --profile $(CARGO_PKG_PROFILE) --root $(PKG_INSTALL_DIR) --path "$(PKG_BUILD_DIR)/easytier" --bin easytier-core \&\& $(TARGET_CROSS)strip --remove-section=.eh_frame --remove-section=.eh_frame_hdr $(PKG_INSTALL_DIR)/bin/easytier-core|}' package/easytier/Makefile
+    sed -i '/^# EASYTIER_COMPILE_CORE/{n;s|.*|Build/Compile=$(CARGO_PKG_VARS) cargo $(CARGO_PKG_ARGS) -Z build-std=std,panic_abort install -v --profile $(CARGO_PKG_PROFILE) --root $(PKG_INSTALL_DIR) --path "$(PKG_BUILD_DIR)/easytier" --bin easytier-core \&\& $(TARGET_CROSS)strip --remove-section=.eh_frame --remove-section=.eh_frame_hdr $(PKG_INSTALL_DIR)/bin/easytier-core|}' package/easytier/Makefile
+    sed -i '/^# EASYTIER_COMPILE_CLI/{n;s|.*|Build/Compile=$(CARGO_PKG_VARS) cargo $(CARGO_PKG_ARGS) -Z build-std=std,panic_abort install -v --profile $(CARGO_PKG_PROFILE) --root $(PKG_INSTALL_DIR) --path "$(PKG_BUILD_DIR)/easytier" --bin easytier-cli \&\& $(TARGET_CROSS)strip --remove-section=.eh_frame --remove-section=.eh_frame_hdr $(PKG_INSTALL_DIR)/bin/easytier-cli|}' package/easytier/Makefile
   fi
 
   # --- Configure & build ---
-  printf 'CONFIG_PACKAGE_easytier=y\n' >> .config
+  printf 'CONFIG_PACKAGE_easytier-core=y\nCONFIG_PACKAGE_easytier-cli=y\nCONFIG_PACKAGE_easytier=y\n' >> .config
   make defconfig
 
   echo "--- Building packages ($SDK_NEW_FMT) ---"
@@ -263,18 +264,20 @@ run_step1() {
   # Copy from .pkgdir (survives post-build autoremove) rather than
   # extracting from apk (Alpine format is fragile).
   echo "--- Saving prebuilt binaries ---"
-  mkdir -p "$PREBUILT_DIR/default"
-  local bin
-  bin=$(find build_dir \
-    -path "*/easytier-default*/.pkgdir/easytier/usr/bin/easytier-core" \
-    -type f 2>/dev/null | head -1) || true
-  if [[ -n "$bin" ]]; then
-    cp "$bin" "$PREBUILT_DIR/default/"
-    echo "  default: $(ls -lh "$PREBUILT_DIR/default/easytier-core" \
-      | awk '{print $5}')"
-  else
-    echo "  WARNING: easytier-core not found for default variant"
-  fi
+  mkdir -p "$PREBUILT_DIR"
+  for bin_name in easytier-core easytier-cli; do
+    local bin
+    bin=$(find build_dir \
+      -path "*/.pkgdir/easytier-core/usr/bin/${bin_name}" \
+      -type f 2>/dev/null | head -1) || true
+    if [[ -n "$bin" ]]; then
+      cp "$bin" "$PREBUILT_DIR/"
+      echo "  ${bin_name}: $(ls -lh "$PREBUILT_DIR/${bin_name}" \
+        | awk '{print $5}')"
+    else
+      echo "  WARNING: ${bin_name} not found"
+    fi
+  done
 
   # Cleanup
   cd "$WORKSPACE"
@@ -288,9 +291,11 @@ run_step2() {
   banner "Step 2: $SDK_LEGACY_VER SDK (package $SDK_LEGACY_FMT)"
 
   # Verify prebuilt binaries exist (produced by Step 1)
-  if [[ ! -f "$PREBUILT_DIR/default/easytier-core" ]]; then
+  if [[ ! -f "$PREBUILT_DIR/easytier-core" \
+     || ! -f "$PREBUILT_DIR/easytier-cli" ]]; then
     echo "ERROR: prebuilt binaries not found in $PREBUILT_DIR" >&2
-    echo "  Expected: $PREBUILT_DIR/default/easytier-core" >&2
+    echo "  Expected: $PREBUILT_DIR/easytier-core" >&2
+    echo "  Expected: $PREBUILT_DIR/easytier-cli" >&2
     exit 1
   fi
 
@@ -313,7 +318,7 @@ run_step2() {
   cp -r "$WORKSPACE/files" package/easytier/
 
   # --- Configure & build ---
-  printf 'CONFIG_PACKAGE_easytier=y\n' >> .config
+  printf 'CONFIG_PACKAGE_easytier-core=y\nCONFIG_PACKAGE_easytier-cli=y\nCONFIG_PACKAGE_easytier=y\n' >> .config
   make defconfig
 
   echo "--- Building packages ($SDK_LEGACY_FMT) — prebuilt only ---"

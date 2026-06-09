@@ -64,20 +64,61 @@ CARGO_PKG_VARS += PROTOC=$(STAGING_DIR_HOSTPKG)/bin/protoc
 # rules.mk: staging_dir/toolchain-<arch>_gcc-<ver>_musl.
 CARGO_PKG_VARS += BINDGEN_EXTRA_CLANG_ARGS="-nostdinc -I$(TOOLCHAIN_DIR)/include -I$(TOOLCHAIN_DIR)/usr/include"
 
-# ============ easytier ============
+# ============ easytier-core ============
+define Package/easytier-core
+  SECTION:=net
+  CATEGORY:=Network
+  SUBMENU:=VPN
+  TITLE:=EasyTier P2P Mesh VPN (core daemon)
+  URL:=https://github.com/EasyTier/EasyTier
+  DEPENDS:=+kmod-tun $(RUST_ARCH_DEPENDS)
+  VARIANT:=core
+  DEFAULT_VARIANT:=1
+endef
+
+define Package/easytier-core/description
+  EasyTier is a simple, decentralized and secure mesh VPN
+  with WireGuard support. It connects your devices into a
+  single virtual LAN, even behind NAT.
+  .
+  This package contains the easytier-core daemon binary,
+  init script and UCI configuration.
+endef
+
+# ============ easytier-cli ============
+define Package/easytier-cli
+  SECTION:=net
+  CATEGORY:=Network
+  SUBMENU:=VPN
+  TITLE:=EasyTier CLI management tool
+  URL:=https://github.com/EasyTier/EasyTier
+  DEPENDS:=+easytier-core $(RUST_ARCH_DEPENDS)
+  VARIANT:=cli
+endef
+
+define Package/easytier-cli/description
+  Command-line management tool for EasyTier.
+  Connects to easytier-core via RPC to view status and
+  manage the running daemon. Can connect to a remote
+  easytier-core instance.
+endef
+
+# ============ easytier (meta) ============
 define Package/easytier
   SECTION:=net
   CATEGORY:=Network
   SUBMENU:=VPN
-  TITLE:=EasyTier P2P Mesh VPN
+  TITLE:=EasyTier P2P Mesh VPN (meta package)
   URL:=https://github.com/EasyTier/EasyTier
-  DEPENDS:=+kmod-tun $(RUST_ARCH_DEPENDS)
+  DEPENDS:=+easytier-core +easytier-cli
 endef
 
 define Package/easytier/description
   EasyTier is a simple, decentralized and secure mesh VPN
   with WireGuard support. It connects your devices into a
   single virtual LAN, even behind NAT.
+  .
+  This meta package installs both easytier-core and easytier-cli.
 endef
 
 # ============ Build/Compile ============
@@ -99,11 +140,18 @@ export CARGO_PROFILE_RELEASE_STRIP=true
 export RUSTFLAGS := --remap-path-prefix="$(CURDIR)/=" --remap-path-prefix="$(PKG_BUILD_DIR)/="
 
 # easytier is a workspace member, pass subdirectory path to cargo.
-# Only build easytier-core (skip easytier-cli which is not packaged).
+# Each variant builds its respective binary.
 # Each Build/Compile is a single line (no backslash continuation)
 # so that CI sed can target it via the EASYTIER_COMPILE_* markers.
-# EASYTIER_COMPILE
+ifeq ($(BUILD_VARIANT),core)
+# EASYTIER_COMPILE_CORE
 Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core) && $(TARGET_CROSS)strip --remove-section=.eh_frame --remove-section=.eh_frame_hdr $(PKG_INSTALL_DIR)/bin/easytier-core
+endif
+
+ifeq ($(BUILD_VARIANT),cli)
+# EASYTIER_COMPILE_CLI
+Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-cli) && $(TARGET_CROSS)strip --remove-section=.eh_frame --remove-section=.eh_frame_hdr $(PKG_INSTALL_DIR)/bin/easytier-cli
+endif
 
 # Override Build/Prepare to handle case-sensitive directory name
 # mismatch.  The codeload tarball top-level directory is EasyTier-x.y.z
@@ -117,7 +165,7 @@ define Build/Prepare
 	$(Build/Patch/Default)
 endef
 
-define Package/easytier/install
+define Package/easytier-core/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/bin/easytier-core $(1)/usr/bin
 	$(INSTALL_DIR) $(1)/etc/config
@@ -126,5 +174,11 @@ define Package/easytier/install
 	$(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
 endef
 
-$(eval $(call RustBinPackage,easytier))
+define Package/easytier-cli/install
+	$(INSTALL_DIR) $(1)/usr/bin
+	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/bin/easytier-cli $(1)/usr/bin
+endef
+
+$(eval $(call RustBinPackage,easytier-core))
+$(eval $(call RustBinPackage,easytier-cli))
 $(eval $(call BuildPackage,easytier))
