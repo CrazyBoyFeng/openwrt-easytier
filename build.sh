@@ -223,23 +223,23 @@ run_step1() {
   sed -i 's|PROTOC=\$(STAGING_DIR_HOSTPKG)/bin/protoc|PROTOC=/usr/bin/protoc|' \
     package/easytier/Makefile
 
-  # For tier-3 targets (mipsel), replace the Build/Compile lines with
-  # -Zbuild-std variants.  Anchors on EASYTIER_COMPILE_* comment markers.
+  # --- Configure & build ---
+  # For tier-3 targets (mipsel), pass EASYTIER_BUILD_STD so the Makefile's
+  # Build/Compile override inserts -Z build-std=std,panic_abort into the
+  # cargo command.  No sed injection needed — the Makefile reads the
+  # variable directly.
+  local build_std=""
   if [[ "$SLUG" == "ramips-mt7621" ]]; then
-    echo "--- Injecting -Z build-std for tier-3 target ---"
-    sed -i '/^# EASYTIER_COMPILE_CORE/{n;s|.*|Build/Compile=$(CARGO_PKG_VARS) cargo $(CARGO_PKG_ARGS) -Z build-std=std,panic_abort install -v --profile $(CARGO_PKG_PROFILE) --root $(PKG_INSTALL_DIR) --path "$(PKG_BUILD_DIR)/easytier" --bin easytier-core \&\& $(TARGET_CROSS)strip --remove-section=.eh_frame --remove-section=.eh_frame_hdr $(PKG_INSTALL_DIR)/bin/easytier-core|}' package/easytier/Makefile
-    sed -i '/^# EASYTIER_COMPILE_CLI/{n;s|.*|Build/Compile=$(CARGO_PKG_VARS) cargo $(CARGO_PKG_ARGS) -Z build-std=std,panic_abort install -v --profile $(CARGO_PKG_PROFILE) --root $(PKG_INSTALL_DIR) --path "$(PKG_BUILD_DIR)/easytier" --bin easytier-cli \&\& $(TARGET_CROSS)strip --remove-section=.eh_frame --remove-section=.eh_frame_hdr $(PKG_INSTALL_DIR)/bin/easytier-cli|}' package/easytier/Makefile
-    # Remove default Build/Compile override (tier-3 uses the lines above)
-    sed -i '/^# EASYTIER_COMPILE_OVERRIDE/,/^# EASYTIER_COMPILE_OVERRIDE_END/d' package/easytier/Makefile
+    echo "--- Tier-3 target: enabling -Z build-std ---"
+    build_std="-Z build-std=std,panic_abort"
   fi
 
-  # --- Configure & build ---
   printf 'CONFIG_PACKAGE_easytier-core=y\nCONFIG_PACKAGE_easytier-cli=y\n' >> .config
   make defconfig
 
   echo "--- Building packages ($SDK_NEW_FMT) ---"
-  make package/easytier/compile V=s || \
-    make package/easytier/compile V=s
+  make package/easytier/compile V=s EASYTIER_BUILD_STD="$build_std" || \
+    make package/easytier/compile V=s EASYTIER_BUILD_STD="$build_std"
 
   # --- Collect .apk artifacts ---
   # apk filenames lack architecture info (e.g. easytier-2.6.4-r1.apk),

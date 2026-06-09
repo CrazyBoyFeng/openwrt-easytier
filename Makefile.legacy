@@ -80,8 +80,10 @@ endef
 
 # ============ Build/Compile ============
 # Copy prebuilt binary from PREBUILT_DIR (set by CI).
-# Single line (no define/endef) for sed-friendliness.
+# Default is empty: meta package (no BUILD_VARIANT) has nothing to compile.
+# Variant-specific ifeq blocks below override for core and cli.
 # EASYTIER_COMPILE
+Build/Compile=
 ifeq ($(BUILD_VARIANT),core)
 Build/Compile=mkdir -p $(PKG_INSTALL_DIR)/bin && $(CP) $(PREBUILT_DIR)/easytier-core $(PKG_INSTALL_DIR)/bin/
 endif
