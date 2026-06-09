@@ -19,3 +19,171 @@
  pub mod tunnel;
  pub mod utils;
  pub mod web_client;
+--- a/easytier/src/easytier-cli.rs
++++ b/easytier/src/easytier-cli.rs
+@@ -20,12 +20,10 @@
+ use easytier::ShellType;
+ use humansize::format_size;
+ use rust_i18n::t;
+-use service_manager::*;
+ use tabled::settings::{Disable, Modify, Style, Width, location::ByColumnName, object::Columns};
+ use terminal_size::{Width as TerminalWidth, terminal_size};
+ use unicode_width::UnicodeWidthStr;
+ 
+-use easytier::service_manager::{Service, ServiceInstallOptions};
+ use tokio::time::timeout;
+ 
+ use easytier::{
+@@ -138,7 +136,6 @@
+     #[command(about = "inspect self easytier-core status")]
+     Node(NodeArgs),
+     #[command(about = "manage easytier-core as a system service")]
+-    Service(ServiceArgs),
+     #[command(about = "show tcp/kcp proxy status")]
+     Proxy,
+     #[command(about = "show ACL rules statistics")]
+@@ -430,62 +427,8 @@
+     List,
+ }
+ 
+-#[derive(Args, Debug)]
+-struct ServiceArgs {
+-    #[arg(short, long, default_value = env!("CARGO_PKG_NAME"), help = "service name")]
+-    name: String,
+ 
+-    #[command(subcommand)]
+-    sub_command: ServiceSubCommand,
+-}
+ 
+-#[derive(Subcommand, Debug)]
+-enum ServiceSubCommand {
+-    #[command(about = "register easytier-core as a system service")]
+-    Install(InstallArgs),
+-    #[command(about = "unregister easytier-core system service")]
+-    Uninstall,
+-    #[command(about = "check easytier-core system service status")]
+-    Status,
+-    #[command(about = "start easytier-core system service")]
+-    Start,
+-    #[command(about = "stop easytier-core system service")]
+-    Stop,
+-}
+-
+-#[derive(Args, Debug)]
+-struct InstallArgs {
+-    #[arg(long, default_value = env!("CARGO_PKG_DESCRIPTION"), help = "service description")]
+-    description: String,
+-
+-    #[arg(long, help = "display name shown by the service manager")]
+-    display_name: Option<String>,
+-
+-    #[arg(
+-        long,
+-        help = "whether to disable starting the service automatically on boot (true/false)"
+-    )]
+-    disable_autostart: Option<bool>,
+-
+-    #[arg(
+-        long,
+-        help = "whether to disable automatic restart when the service fails (true/false)"
+-    )]
+-    disable_restart_on_failure: Option<bool>,
+-
+-    #[arg(long, help = "path to easytier-core binary")]
+-    core_path: Option<PathBuf>,
+-
+-    #[arg(long, help = "working directory for the easytier-core service")]
+-    service_work_dir: Option<PathBuf>,
+-
+-    #[arg(
+-        trailing_var_arg = true,
+-        allow_hyphen_values = true,
+-        help = "args to pass to easytier-core"
+-    )]
+-    core_args: Option<Vec<OsString>>,
+-}
+ 
+ type Error = anyhow::Error;
+ 
+@@ -2972,81 +2915,6 @@
+         SubCommand::Node(sub_cmd) => {
+             handler.handle_node(sub_cmd.sub_command.as_ref()).await?;
+         }
+-        SubCommand::Service(service_args) => {
+-            let service = Service::new(service_args.name)?;
+-            match service_args.sub_command {
+-                ServiceSubCommand::Install(install_args) => {
+-                    let bin_path = install_args.core_path.unwrap_or_else(|| {
+-                        let mut ret = std::env::current_exe()
+-                            .unwrap()
+-                            .parent()
+-                            .unwrap()
+-                            .join("easytier-core");
+-
+-                        if cfg!(target_os = "windows") {
+-                            ret.set_extension("exe");
+-                        }
+-
+-                        ret
+-                    });
+-                    let bin_path = std::fs::canonicalize(bin_path).map_err(|e| {
+-                        anyhow::anyhow!("failed to get easytier core application: {}", e)
+-                    })?;
+-                    let bin_args = install_args.core_args.unwrap_or_default();
+-                    let work_dir = install_args.service_work_dir.unwrap_or_else(|| {
+-                        if cfg!(target_os = "windows") {
+-                            bin_path.parent().unwrap().to_path_buf()
+-                        } else {
+-                            std::env::temp_dir()
+-                        }
+-                    });
+-
+-                    let work_dir = std::fs::canonicalize(&work_dir).map_err(|e| {
+-                        anyhow::anyhow!(
+-                            "failed to get service work directory[{}]: {}",
+-                            work_dir.display(),
+-                            e
+-                        )
+-                    })?;
+-
+-                    if !work_dir.is_dir() {
+-                        return Err(anyhow::anyhow!("work directory is not a directory"));
+-                    }
+-
+-                    let install_options = ServiceInstallOptions {
+-                        program: bin_path,
+-                        args: bin_args,
+-                        work_directory: work_dir,
+-                        disable_autostart: install_args.disable_autostart.unwrap_or(false),
+-                        description: Some(install_args.description),
+-                        display_name: install_args.display_name,
+-                        disable_restart_on_failure: install_args
+-                            .disable_restart_on_failure
+-                            .unwrap_or(false),
+-                    };
+-                    println!("install_options: {:#?}", install_options);
+-                    service.install(&install_options)?;
+-                }
+-                ServiceSubCommand::Uninstall => {
+-                    service.uninstall()?;
+-                }
+-                ServiceSubCommand::Status => {
+-                    let status = service.status()?;
+-                    match status {
+-                        ServiceStatus::Running => println!("Service is running"),
+-                        ServiceStatus::Stopped(_) => println!("Service is stopped"),
+-                        ServiceStatus::NotInstalled => println!("Service is not installed"),
+-                    }
+-                }
+-                ServiceSubCommand::Start => {
+-                    service.start()?;
+-                }
+-                ServiceSubCommand::Stop => {
+-                    service.stop()?;
+-                }
+-            }
+-        }
+-        SubCommand::Proxy => {
+             let mut entries = vec![];
+ 
+             for client_type in &["tcp", "kcp_src", "kcp_dst", "quic_src", "quic_dst"] {
