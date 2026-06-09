@@ -11,11 +11,6 @@ on:
         required: false
         type: string
         default: ''
-      force-rebuild:
-        description: 'Force rebuild even if cached (true/false)'
-        required: false
-        type: boolean
-        default: false
 
 jobs:
   build:
@@ -45,7 +40,7 @@ jobs:
           lookup-only: true
 
       - name: Restore cached output
-        if: steps.cache.outputs.cache-hit == 'true' && inputs.force-rebuild != true
+        if: steps.cache.outputs.cache-hit == 'true'
         run: |
           echo "✅ Cache hit for commit ${{ github.sha }} (${{ matrix.slug }}) — skipping build"
           # Create dummy output so artifact upload succeeds
@@ -53,7 +48,7 @@ jobs:
           touch output/.cached
 
       - name: Install prerequisites
-        if: steps.cache.outputs.cache-hit != 'true' || inputs.force-rebuild == true
+        if: steps.cache.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update && sudo apt-get install -y \
             protobuf-compiler clang libclang-dev zstd
@@ -64,12 +59,12 @@ jobs:
           fi
 
       - name: Build packages
-        if: steps.cache.outputs.cache-hit != 'true' || inputs.force-rebuild == true
+        if: steps.cache.outputs.cache-hit != 'true'
         timeout-minutes: 330
         run: bash ./build.sh "${{ matrix.slug }}"
 
       - name: Save build cache
-        if: steps.cache.outputs.cache-hit != 'true' || inputs.force-rebuild == true
+        if: steps.cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: output/
