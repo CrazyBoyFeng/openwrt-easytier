@@ -215,79 +215,11 @@ BLOATY_REPORT="${OUTPUT_DIR}/bloat-report.txt"
   > "$BLOATY_RAW" 2>&1 \
   || { echo "ERROR: bloaty failed (exit $?)" >&2; exit 1; }
 
-# Post-process: replace DWARF compile unit file paths with clean crate names.
-# Also filter out debug section lines ([section .debug_*]) which have
-# 0 VM size and are not real code — they are DWARF metadata sections.
-#
-# After --remap-path-prefix, paths look like:
-#   =.cargo/registry/src/<hash>/ring-0.17.0/src/lib.rs
-#   =.bloat-src/easytier/src/lib.rs
-#   =.cargo/registry/src/<hash>/zstd-sys-2.0.13+zstd.1.5.6/zstd/lib/compress/zstd_lazy.c
-#   easytier/src/easytier-core.rs/@/easytier_core.95fd1469c661508c-cgu.0
-#   rustc/<hash>/library/std/src/lib.rs
-# We extract the crate name (e.g. "ring", "easytier", "zstd-sys") from these.
-python3 -c '
-import re, sys
-
-def extract_crate_name(path):
-    # Pattern 1: .../<crate>-<version>/src/... (Rust registry crate)
-    # e.g. .../ring-0.17.0/src/lib.rs -> ring
-    #       .../serde_json-1.0.0/src/... -> serde_json
-    m = re.search(r"/([^/]+-\d[^/]*?)/src/", path)
-    if m:
-        name_ver = m.group(1)
-        parts = re.split(r"-(?=\d)", name_ver, 1)
-        return parts[0] if parts else name_ver
-    # Pattern 2: .../<name>/src/... (git dep, rustc std, workspace member)
-    # e.g. .cargo/git/checkouts/.../9496479/kcp_sys/src/lib.rs -> kcp_sys
-    #       rustc/<hash>/library/std/src/lib.rs -> std
-    m = re.search(r"/([^/]+)/src/", path)
-    if m:
-        return m.group(1)
-    # Pattern 3: Rust LTO symbol remapping @/ separator
-    # e.g. easytier/src/easytier-core.rs/@/easytier_core.95fd1469c661508c-cgu.0 -> easytier_core
-    m = re.search(r"/@/([^.]+)", path)
-    if m:
-        return m.group(1)
-    # Pattern 4: C/C++ source in -sys crate directory (no /src/ sub-path)
-    # e.g. .../zstd-sys-2.0.13+zstd.1.5.6/zstd/lib/compress/zstd_lazy.c -> zstd-sys
-    #       .../libz-sys-1.1.20/libz/... -> libz-sys
-    for seg in path.split("/"):
-        if re.match(r"^[a-z][a-z0-9_]+-\d", seg):
-            parts = re.split(r"-(?=\d)", seg, 1)
-            return parts[0] if parts else seg
-    # Fallback: strip -cgu.N and .hash suffix from last path segment
-    # e.g. easytier_core.95fd1469c661508c-cgu.0 -> easytier_core
-    last = path.rstrip("/").rsplit("/", 1)[-1]
-    last = re.sub(r"-cgu\.\d+$", "", last)
-    last = re.sub(r"\.[0-9a-f]{16,}$", "", last)
-    if last:
-        return last
-    return path
-
-for line in sys.stdin:
-    stripped = line.rstrip("\n")
-    # Skip debug section lines (DWARF metadata, not code)
-    if re.search(r"\[section \.debug_", stripped):
-        continue
-    # Replace file paths with clean crate names
-    m = re.search(r"(\S+/src/\S+)", stripped)
-    if m:
-        path = m.group(1)
-        crate_name = extract_crate_name(path)
-        stripped = stripped[:m.start()] + crate_name + stripped[m.end():]
-    print(stripped)
-' < "$BLOATY_RAW" > "$BLOATY_REPORT"
-
-echo "  bloat-report.txt: $(wc -l < "$BLOATY_REPORT" 2>/dev/null || echo '0') lines"
-echo "  First 5 lines:"
-head -5 "$BLOATY_REPORT" 2>/dev/null
-
-# ===================== Generate dependency tree =====================
-# Use cargo tree to get the feature-aware dependency graph for the lite build.
-# This is scoped to the easytier package with the exact features used during
-# compilation, automatically excluding other workspace members and
-# feature-gated dependencies that aren't part of the lite build.
+# ===================== Generate dependency tree (early) =====================
+# Cargo tree is needed before post-processing bloaty output so we can
+# build a C-library-prefix -> -sys-crate mapping for paths like
+#   zstd/lib/compress/zstd_lazy.c  ->  zstd-sys
+# where the C compiler records only a relative path in DWARF.
 CARGO_TREE="${OUTPUT_DIR}/cargo-tree.txt"
 echo ""
 echo "  Generating dependency tree (cargo tree -p easytier, lite features)..."
@@ -304,9 +236,150 @@ else
   rm -f "$CARGO_TREE"
 fi
 
+# Generate cargo metadata for feature-to-dependency mapping.
+# cargo tree --edges features shows the dependency's features, not the
+# parent's features.  cargo metadata packages[].features gives us the
+# correct (parent, dep) -> parent_feature mapping via dep:crate specs.
+# e.g. easytier's "kcp" feature = ["dep:kcp-sys"] means easytier's
+# "kcp" feature gates kcp-sys.
+# Note: cargo metadata does not support --no-default-features/--features.
+# It resolves the full workspace, but we only use packages[].features
+# (the feature definitions from Cargo.toml) which is unaffected.
+CARGO_METADATA="${OUTPUT_DIR}/cargo-metadata.json"
+if [[ -f "$CARGO_TREE" ]]; then
+  echo "  Generating cargo metadata for feature mapping..."
+  if cargo metadata --format-version 1 \
+      --manifest-path "${SRC_DIR}/Cargo.toml" \
+      > "$CARGO_METADATA" 2>/dev/null; then
+    echo "  cargo-metadata.json: $(wc -c < "$CARGO_METADATA") bytes"
+  else
+    echo "  WARNING: cargo metadata failed, feature annotations will be skipped"
+    rm -f "$CARGO_METADATA"
+  fi
+fi
+
+# Build C-library-prefix -> -sys-crate mapping from cargo tree.
+# e.g. zstd -> zstd-sys,  kcp -> kcp-sys
+# This handles C source paths recorded by cc/gcc in DWARF as relative
+# paths (e.g. zstd/lib/compress/zstd_lazy.c) without registry prefix.
+C_PREFIX_MAP=""
+if [[ -f "$CARGO_TREE" ]]; then
+  C_PREFIX_MAP=$(python3 -c '
+import re, sys
+crates = set()
+with open(sys.argv[1]) as f:
+    for line in f:
+        m = re.match(r"\s*(?:[\u251c\u2514\u2502\u2500 ]+)?(\S+)", line)
+        if m:
+            crates.add(m.group(1))
+mapping = {}
+for c in crates:
+    idx = c.find("-sys")
+    if idx > 0:
+        prefix = c[:idx]
+        mapping[prefix] = c
+import json
+print(json.dumps(mapping))
+' "$CARGO_TREE")
+fi
+
+# Post-process: replace DWARF compile unit file paths with clean crate names.
+# Also filter out debug section lines ([section .debug_*]) which have
+# 0 VM size and are not real code — they are DWARF metadata sections.
+#
+# After --remap-path-prefix, paths look like:
+#   =.cargo/registry/src/<hash>/ring-0.17.0/src/lib.rs
+#   =.bloat-src/easytier/src/lib.rs
+#   =.cargo/registry/src/<hash>/zstd-sys-2.0.13+zstd.1.5.6/zstd/lib/compress/zstd_lazy.c
+#   easytier/src/easytier-core.rs/@/easytier_core.95fd1469c661508c-cgu.0
+#   rustc/<hash>/library/std/src/lib.rs
+#   zstd/lib/compress/zstd_lazy.c  (C source, relative path from cc crate)
+# We extract the crate name (e.g. "ring", "easytier", "zstd-sys") from these.
+python3 -c '
+import re, sys, json
+
+# Load C library prefix -> -sys crate name mapping from cargo tree
+c_prefix_map = {}
+try:
+    c_prefix_map = json.loads(sys.argv[1]) if sys.argv[1] else {}
+except (json.JSONDecodeError, IndexError):
+    pass
+
+def extract_crate_name(path):
+    # Pattern 1: .../<crate>-<version>/src/... (Rust registry crate)
+    # e.g. .../ring-0.17.0/src/lib.rs -> ring
+    #       .../serde_json-1.0.0/src/... -> serde_json
+    m = re.search(r"/([^/]+-\d[^/]*?)/src/", path)
+    if m:
+        name_ver = m.group(1)
+        parts = re.split(r"-(?=\d)", name_ver, 1)
+        return parts[0] if parts else name_ver
+    # Pattern 2: .../<name>/src/... (git dep, rustc std, workspace member)
+    # e.g. .cargo/git/checkouts/kcp-sys-xxx/9496479/src/lib.rs -> kcp-sys
+    #       rustc/<hash>/library/std/src/lib.rs -> std
+    m = re.search(r"/([^/]+)/src/", path)
+    if m:
+        candidate = m.group(1)
+        # Skip git checkout revision hash (pure hex, 7-40 chars)
+        # and extract crate name from the checkouts directory instead
+        if re.match(r"^[0-9a-f]{7,40}$", candidate):
+            m2 = re.search(r"/checkouts/([a-z][a-z0-9_-]*?)-[0-9a-f]{6,}/", path)
+            if m2:
+                return m2.group(1)
+        else:
+            return candidate
+    # Pattern 3: Rust LTO symbol remapping @/ separator
+    # e.g. easytier/src/easytier-core.rs/@/easytier_core.95fd1469c661508c-cgu.0 -> easytier_core
+    m = re.search(r"/@/([^.]+)", path)
+    if m:
+        return m.group(1)
+    # Pattern 4: C/C++ source in -sys crate directory (has crate-version in path)
+    # e.g. .../zstd-sys-2.0.13+zstd.1.5.6/zstd/lib/compress/zstd_lazy.c -> zstd-sys
+    #       .../libz-sys-1.1.20/libz/... -> libz-sys
+    for seg in path.split("/"):
+        if re.match(r"^[a-z][a-z0-9_]+-\d", seg):
+            parts = re.split(r"-(?=\d)", seg, 1)
+            return parts[0] if parts else seg
+    # Pattern 5: C source with relative path (no registry prefix)
+    # e.g. zstd/lib/compress/zstd_lazy.c -> zstd-sys
+    #       kcp/src/... -> kcp-sys
+    # The C compiler (via cc crate) records relative paths in DWARF.
+    # Match first path segment against the C prefix map from cargo tree.
+    first_seg = path.split("/")[0] if path else ""
+    if first_seg in c_prefix_map:
+        return c_prefix_map[first_seg]
+    # Fallback: strip -cgu.N and .hash suffix from last path segment
+    # e.g. easytier_core.95fd1469c661508c-cgu.0 -> easytier_core
+    last = path.rstrip("/").rsplit("/", 1)[-1]
+    last = re.sub(r"-cgu\.\d+$", "", last)
+    last = re.sub(r"\.[0-9a-f]{16,}$", "", last)
+    if last:
+        return last
+    return path
+
+for line in sys.stdin:
+    stripped = line.rstrip("\n")
+    # Skip debug section lines (DWARF metadata, not code)
+    if re.search(r"\[section \.debug_", stripped):
+        continue
+    # Replace file paths with clean crate names
+    # Match paths ending with .ext (covers /src/ paths and C source paths)
+    m = re.search(r"(\S+\.\w+)$", stripped)
+    if m:
+        path = m.group(1)
+        crate_name = extract_crate_name(path)
+        if crate_name != path:
+            stripped = stripped[:m.start()] + crate_name + stripped[m.end():]
+    print(stripped)
+' "$C_PREFIX_MAP" < "$BLOATY_RAW" > "$BLOATY_REPORT"
+
+echo "  bloat-report.txt: $(wc -l < "$BLOATY_REPORT" 2>/dev/null || echo '0') lines"
+echo "  First 5 lines:"
+head -5 "$BLOATY_REPORT" 2>/dev/null
+
 # ===================== Inclusive size + dependency chain analysis =====================
-# Combine bloaty per-crate self sizes with cargo tree dependency graph
-# to compute inclusive sizes and show reverse dependency chains.
+# Cargo tree was already generated above (needed for C prefix mapping).
+# Use it here to compute inclusive sizes and reverse dependency chains.
 INCLUSIVE_REPORT="${OUTPUT_DIR}/inclusive-size-report.txt"
 DEP_CHAINS_REPORT="${OUTPUT_DIR}/dependency-chains.txt"
 
@@ -359,16 +432,30 @@ def extract_crate_name(path):
     # Pattern 2: .../<name>/src/...
     m = re.search(r'/([^/]+)/src/', path)
     if m:
-        return m.group(1)
+        candidate = m.group(1)
+        # Skip git checkout revision hash (pure hex, 7-40 chars)
+        if re.match(r'^[0-9a-f]{7,40}$', candidate):
+            m2 = re.search(r'/checkouts/([a-z][a-z0-9_-]*?)-[0-9a-f]{6,}/', path)
+            if m2:
+                return m2.group(1)
+        else:
+            return candidate
     # Pattern 3: Rust LTO @/ symbol remapping
     m = re.search(r'/@/([^.]+)', path)
     if m:
         return m.group(1)
-    # Pattern 4: C/C++ source in -sys crate directory
+    # Pattern 4: C/C++ source in -sys crate directory (has crate-version in path)
     for seg in path.split('/'):
         if re.match(r'^[a-z][a-z0-9_]+-\d', seg):
             parts = re.split(r'-(?=\d)', seg, 1)
             return parts[0] if parts else seg
+    # Pattern 5: C source with relative path (no registry prefix)
+    # e.g. zstd/lib/compress/zstd_lazy.c -> zstd-sys
+    # The C compiler (via cc crate) records relative paths in DWARF.
+    # Match first path segment against the C prefix map from cargo tree.
+    first_seg = path.split('/')[0] if path else ''
+    if first_seg in c_prefix_map:
+        return c_prefix_map[first_seg]
     # Fallback: strip -cgu.N and .hash suffix
     last = path.rstrip('/').rsplit('/', 1)[-1]
     last = re.sub(r'-cgu\.\d+$', '', last)
@@ -400,8 +487,10 @@ for line in lines:
             idx = i
             break
     if idx == -1:
-        # Root line (no tree connector)
-        m = re.match(r'(\S+)', line)
+        # Root line (no tree connector) — must look like a crate name
+        # e.g. "easytier v2.6.4 (path+...)"
+        # Skip cargo download/status messages that lack tree connectors
+        m = re.match(r'([a-zA-Z][\w-]*)\s+v', line)
         if not m:
             continue
         name = m.group(1)
@@ -411,7 +500,7 @@ for line in lines:
     # Depth = number of │ characters before the connector + 1
     depth = line[:idx].count('\u2502') + 1
     rest = line[idx + 3:]
-    m = re.match(r'(\S+)', rest)
+    m = re.match(r'\s*(\S+)', rest)
     if not m:
         continue
     name = m.group(1)
@@ -426,6 +515,42 @@ for line in lines:
     stack.append((depth, name))
 
 print(f"  Dependency graph: {len(graph)} crates (from cargo tree, easytier with lite features)")
+
+# Build C library prefix -> -sys crate name mapping
+# e.g. zstd -> zstd-sys,  kcp -> kcp-sys
+# Used by Pattern 5 in extract_crate_name for C source relative paths.
+c_prefix_map = {}
+for c in graph:
+    idx = c.find('-sys')
+    if idx > 0:
+        prefix = c[:idx]
+        c_prefix_map[prefix] = c
+print(f"  C prefix map: {c_prefix_map}")
+
+# Parse cargo metadata to build (parent_crate, dep_crate) -> parent_feature mapping.
+# cargo tree --edges features shows the dependency's own features (wrong).
+# cargo metadata packages[].features has "dep:crate_name" specs that tell us
+# which feature of the parent gates each dependency.
+# e.g. easytier features: {"kcp": ["dep:kcp-sys"]} means easytier's
+# "kcp" feature gates kcp-sys -> feature_map[("easytier", "kcp-sys")] = {"kcp"}
+import json
+feature_map = {}
+cargo_metadata_file = os.environ.get('CARGO_METADATA', '')
+if cargo_metadata_file and os.path.exists(cargo_metadata_file):
+    with open(cargo_metadata_file) as f:
+        raw = f.read().strip()
+    meta = json.loads(raw)
+    for pkg in meta.get('packages', []):
+        pkg_name = pkg['name']
+        for feat_name, feat_values in pkg.get('features', {}).items():
+            for value in feat_values:
+                # dep:crate_name means this feature gates the crate as optional dep
+                if value.startswith('dep:'):
+                    dep_name = value[4:]
+                    feature_map.setdefault((pkg_name, dep_name), set()).add(feat_name)
+    print(f"  Feature map: {len(feature_map)} feature edges from cargo metadata")
+else:
+    print(f"  No cargo metadata, feature annotations disabled")
 
 # Parse bloaty raw output: {crate_name: vm_size_bytes}
 self_sizes = {}
@@ -460,33 +585,34 @@ for crate in self_sizes:
 
 # Sort by inclusive VM size descending
 rows = []
+# Compute all deps count (recursive) for each crate
+def count_all_deps(crate, visited):
+    visited.add(crate)
+    total = 0
+    for dep in graph.get(crate, []):
+        if dep not in visited:
+            total += 1 + count_all_deps(dep, visited)
+    return total
+
 for name, inc in inclusive.items():
-    nd = len(graph.get(name, []))
-    rows.append((name, inc, nd))
+    na = count_all_deps(name, set())
+    rows.append((name, inc, na))
 rows.sort(key=lambda x: -x[1])
 
 # --- Output 1: Inclusive Size Report (VM size only) ---
 output_dir = os.environ.get('OUTPUT_DIR', '.')
 buf1 = io.StringIO()
-buf1.write("Inclusive Size Analysis (VM Size)\n")
-buf1.write(f"Per-crate self sizes total: {fmt(sum(self_sizes.values()))} ({len(self_sizes)} crates)\n")
-buf1.write(f"Dependency graph: {len(graph)} crates from cargo tree (easytier with lite features)\n")
-buf1.write("\n")
-buf1.write(f"{'Crate':<35} {'Inclusive VM Size':>18} {'Direct Deps':>12}\n")
+buf1.write(f"{'Inclusive VM Size':>18} {'All Deps':>12} {'Crate':<35}\n")
 buf1.write('-' * 67)
 for name, inc, nd in rows:
-    buf1.write(f"\n{name:<35} {fmt(inc):>18} {nd:>12}")
-buf1.write('\n')
+    buf1.write(f"\n{fmt(inc):>18} {nd:>12} {name:<35}")
+buf1.write(f"\n{fmt(sum(self_sizes.values())):>18} {len(graph):>12} {'total':<35}\n")
 
 with open(os.path.join(output_dir, 'inclusive-size-report.txt'), 'w') as f:
     f.write(buf1.getvalue())
 
 # --- Output 2: Reverse Dependency Chains ---
 buf2 = io.StringIO()
-buf2.write("Reverse Dependency Chains (who depends on each crate)\n")
-buf2.write(f"Showing {len(self_sizes)} crates visible to bloaty\n")
-buf2.write(f"Reverse dependency graph from cargo tree ({len(graph)} crates)\n")
-buf2.write("\n")
 
 reverse_graph = {}
 for crate, deps in graph.items():
@@ -499,17 +625,20 @@ def print_reverse_tree(buf, crate, visited, prefix=""):
     for i, parent in enumerate(parents):
         is_last = (i == len(parents) - 1)
         connector = "\u2514\u2500\u2500 " if is_last else "\u251c\u2500\u2500 "
-        marker = ""
-        if parent in self_sizes:
-            marker = f" [bloaty: {fmt(self_sizes[parent])}]"
-        buf.write(f"{prefix}{connector}{parent}{marker}\n")
+        marker = f" [inclusive: {fmt(inclusive.get(parent, 0))}]"
+        # Annotate with feature(s) that caused this dependency
+        features = feature_map.get((parent, crate))
+        if features:
+            feature_str = ",".join(sorted(features))
+            buf.write(f"{prefix}{connector}{parent} [inclusive: {fmt(inclusive.get(parent, 0))}, feature: {feature_str}]\n")
+        else:
+            buf.write(f"{prefix}{connector}{parent}{marker}\n")
         extension = "    " if is_last else "\u2502   "
         print_reverse_tree(buf, parent, visited, prefix + extension)
 
 for name, inc, nd in rows:
     total_parents = len(reverse_graph.get(name, set()))
-    buf2.write(f"{name}  [self: {fmt(self_sizes[name])}, inclusive: {fmt(inc)}, "
-               f"used by {total_parents} crates]\n")
+    buf2.write(f"{name}  [inclusive: {fmt(inc)}, used by {total_parents} crates]\n")
     print_reverse_tree(buf2, name, set())
     buf2.write("\n")
 
@@ -521,6 +650,7 @@ PYEOF
 
   SRC_DIR="$SRC_DIR" BLOATY_RAW="$BLOATY_RAW" OUTPUT_DIR="$OUTPUT_DIR" \
     CARGO_TREE="${CARGO_TREE:-}" \
+    CARGO_METADATA="${CARGO_METADATA:-}" \
     python3 "$PY_SCRIPT"
 
   echo "  inclusive-size-report.txt: $(wc -l < "$INCLUSIVE_REPORT" 2>/dev/null || echo '0') lines"

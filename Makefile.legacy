@@ -1,0 +1,91 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Copyright (C) 2025 CrazyBoyFeng
+#
+# Legacy Makefile for OpenWrt 23.05.x SDK.
+# This Makefile packages prebuilt easytier-core binaries into .ipk files.
+# It does NOT compile Rust — binaries must be pre-compiled by the
+# 25.12.4 CI step and placed in PREBUILT_DIR before this Makefile is used.
+#
+# This Makefile intentionally does NOT follow OpenWrt package submission
+# standards (no rust-package.mk dependency, no RustBinPackage macro).
+
+include $(TOPDIR)/rules.mk
+
+PKG_NAME:=easytier
+PKG_VERSION:=2.6.4
+PKG_RELEASE:=2
+
+PKG_MAINTAINER:=CrazyBoyFeng
+PKG_LICENSE:=Apache-2.0
+
+include $(INCLUDE_DIR)/package.mk
+
+# ============ common ============
+define Package/easytier/Default
+  SECTION:=net
+  CATEGORY:=Network
+  SUBMENU:=VPN
+  TITLE:=EasyTier P2P Mesh VPN
+  URL:=https://github.com/EasyTier/EasyTier
+  DEPENDS:=+kmod-tun
+endef
+
+define Package/easytier/Default/description
+  EasyTier is a simple, decentralized and secure mesh VPN
+  with WireGuard support. It connects your devices into a
+  single virtual LAN, even behind NAT.
+endef
+
+# ============ easytier-lite ============
+define Package/easytier-lite
+  $(call Package/easytier/Default)
+  TITLE+= (lite build)
+  VARIANT:=lite
+  PROVIDES:=easytier
+endef
+
+define Package/easytier-lite/description
+  $(call Package/easytier/Default/description)
+  .
+  This lite build removes wireguard, socks5 and smoltcp features.
+  Suitable for routers with limited flash storage.
+endef
+
+# ============ easytier (default) ============
+define Package/easytier
+  $(call Package/easytier/Default)
+  TITLE+= (default build)
+  VARIANT:=default
+  DEFAULT_VARIANT:=1
+  CONFLICTS:=easytier-lite
+endef
+
+define Package/easytier/description
+  $(call Package/easytier/Default/description)
+  .
+  This default build includes all default Cargo features: wireguard, socks5, smoltcp.
+endef
+
+# ============ Build/Compile ============
+# Copy prebuilt binary from PREBUILT_DIR (set by CI).
+# PREBUILT_DIR contains per-variant subdirs: default/easytier-core, lite/easytier-core.
+# $(or $(BUILD_VARIANT),default) handles the default variant.
+# Single line (no define/endef) for sed-friendliness.
+# EASYTIER_COMPILE
+Build/Compile=mkdir -p $(PKG_INSTALL_DIR)/bin && $(CP) $(PREBUILT_DIR)/$(or $(BUILD_VARIANT),default)/easytier-core $(PKG_INSTALL_DIR)/bin/
+
+# ============ Install ============
+define Package/easytier/install
+	$(INSTALL_DIR) $(1)/usr/bin
+	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/bin/easytier-core $(1)/usr/bin/
+	$(INSTALL_DIR) $(1)/etc/config
+	$(INSTALL_CONF) ./files/etc/config/easytier $(1)/etc/config/easytier
+	$(INSTALL_DIR) $(1)/etc/init.d
+	$(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
+endef
+
+Package/easytier-lite/install = $(Package/easytier/install)
+
+$(eval $(call BuildPackage,easytier-lite))
+$(eval $(call BuildPackage,easytier))
