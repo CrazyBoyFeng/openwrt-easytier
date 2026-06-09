@@ -45,7 +45,7 @@ config easytier 'easytier'
 
         # ===== RPC 设置 (RPC Settings) =====
 
-        option rpc_portal '15888'
+        # option rpc_portal ''
         # option rpc_portal_whitelist ''
 
         # ===== 监听器设置 (Listener Settings) =====

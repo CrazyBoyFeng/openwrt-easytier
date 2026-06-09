@@ -181,7 +181,7 @@ Options are following the [official documentation](https://easytier.cn/guide/net
 
 | Option | Default | CLI Equivalent | Description |
 |--------|---------|---------------|-------------|
-| `rpc_portal` | `0` | `--rpc-portal` | RPC portal address (`0` = random port) |
+| `rpc_portal` | `15888` | `--rpc-portal` | RPC portal address |
 | `rpc_portal_whitelist` | (empty) | `--rpc-portal-whitelist` | RPC whitelist (CIDR, comma-separated) |
 
 ### Listener Settings
