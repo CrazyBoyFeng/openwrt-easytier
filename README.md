@@ -291,28 +291,6 @@ config easytier 'home'
     list peers 'tcp://home.example.com:11010'
 ```
 
-## Build from Source
-
-### Using OpenWrt SDK
-
-```sh
-# Clone into your SDK's package directory
-git clone https://github.com/CrazyBoyFeng/openwrt-easytier.git package/easytier
-
-# Update and install all feeds (required for rust/host, protobuf/host, kmod-tun)
-./scripts/feeds update -a
-./scripts/feeds install -a
-
-# Configure
-make menuconfig
-
-# Build core
-make package/easytier-core/compile V=s
-
-# Build cli
-make package/easytier-cli/compile V=s
-```
-
 ## Log Viewing
 
 ```sh
