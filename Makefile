@@ -72,8 +72,6 @@ define Package/easytier-core
   TITLE:=EasyTier P2P Mesh VPN (core daemon)
   URL:=https://github.com/EasyTier/EasyTier
   DEPENDS:=+kmod-tun $(RUST_ARCH_DEPENDS)
-  VARIANT:=core
-  DEFAULT_VARIANT:=1
 endef
 
 define Package/easytier-core/description
@@ -93,7 +91,6 @@ define Package/easytier-cli
   TITLE:=EasyTier CLI management tool
   URL:=https://github.com/EasyTier/EasyTier
   DEPENDS:=+easytier-core $(RUST_ARCH_DEPENDS)
-  VARIANT:=cli
 endef
 
 define Package/easytier-cli/description
@@ -141,20 +138,25 @@ export RUSTFLAGS := --remap-path-prefix="$(CURDIR)/=" --remap-path-prefix="$(PKG
 
 # Override Build/Compile BEFORE eval so BuildPackage captures it.
 # EasyTier 2.6.4 is a Cargo workspace; the actual binary crate lives
-# in the easytier/ subdirectory.  BUILD_VARIANT is passed by the
-# sub-make (subdir_make_opts) and selects --bin <name>.
-# For the meta package (no BUILD_VARIANT), Build/Compile is empty.
+# in the easytier/ subdirectory.  Both binary targets are built in a
+# single cargo install invocation.  OpenWrt shares PKG_BUILD_DIR and
+# PKG_INSTALL_DIR across all packages defined in this Makefile, so
+# the compile step runs once and each Package/*/install picks only
+# the binary it needs.
 # Set EASYTIER_BUILD_STD for tier-3 targets (e.g. "-Z build-std=std,panic_abort").
 # EASYTIER_COMPILE_OVERRIDE
-Build/Compile=$(if $(BUILD_VARIANT),+$(CARGO_PKG_VARS) cargo $(EASYTIER_BUILD_STD) install -v \
+Build/Compile=+$(CARGO_PKG_VARS) cargo $(EASYTIER_BUILD_STD) install -v \
 	--profile $(CARGO_PKG_PROFILE) \
 	--root $(PKG_INSTALL_DIR) \
 	--path "$(PKG_BUILD_DIR)/easytier" \
-	--bin easytier-$(BUILD_VARIANT) \
+	--bin easytier-core \
+	--bin easytier-cli \
 	$(if $(filter --jobserver%,$(PKG_JOBS)),,-j1) \
 	$(CARGO_PKG_ARGS) && \
 	$(TARGET_CROSS)strip --remove-section=.eh_frame --remove-section=.eh_frame_hdr \
-	$(PKG_INSTALL_DIR)/bin/easytier-$(BUILD_VARIANT),)
+	$(PKG_INSTALL_DIR)/bin/easytier-core && \
+	$(TARGET_CROSS)strip --remove-section=.eh_frame --remove-section=.eh_frame_hdr \
+	$(PKG_INSTALL_DIR)/bin/easytier-cli
 # EASYTIER_COMPILE_OVERRIDE_END
 
 # Override Build/Prepare to handle case-sensitive directory name
@@ -187,6 +189,6 @@ define Package/easytier/install
 	# meta package: no files to install
 endef
 
-$(eval $(call RustBinPackage,easytier-core))
-$(eval $(call RustBinPackage,easytier-cli))
+$(eval $(call BuildPackage,easytier-core))
+$(eval $(call BuildPackage,easytier-cli))
 $(eval $(call BuildPackage,easytier))
