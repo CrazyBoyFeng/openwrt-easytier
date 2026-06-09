@@ -223,16 +223,15 @@ run_step1() {
   sed -i 's|PROTOC=\$(STAGING_DIR_HOSTPKG)/bin/protoc|PROTOC=/usr/bin/protoc|' \
     package/easytier/Makefile
 
-  # For tier-3 targets (mipsel), replace the Build/Compile lines with
-  # -Zbuild-std variants.  Anchors on EASYTIER_COMPILE_* comment markers.
+  # For tier-3 targets (mipsel), replace the Build/Compile line with
+  # -Zbuild-std variant.  Anchors on EASYTIER_COMPILE comment marker.
   if [[ "$SLUG" == "ramips-mt7621" ]]; then
     echo "--- Injecting -Z build-std for tier-3 target ---"
-    sed -i '/^# EASYTIER_COMPILE_LITE/{n;s|.*|Build/Compile=$(CARGO_PKG_VARS) cargo $(CARGO_PKG_ARGS) -Z build-std=std,panic_abort install -v --profile $(CARGO_PKG_PROFILE) --features "$(strip $(RUST_PKG_FEATURES))" --root $(PKG_INSTALL_DIR) --path "$(PKG_BUILD_DIR)/easytier" --bin easytier-core --no-default-features \&\& $(TARGET_CROSS)strip --remove-section=.eh_frame --remove-section=.eh_frame_hdr $(PKG_INSTALL_DIR)/bin/easytier-core|}' package/easytier/Makefile
-    sed -i '/^# EASYTIER_COMPILE_DEFAULT/{n;s|.*|Build/Compile=$(CARGO_PKG_VARS) cargo $(CARGO_PKG_ARGS) -Z build-std=std,panic_abort install -v --profile $(CARGO_PKG_PROFILE) --root $(PKG_INSTALL_DIR) --path "$(PKG_BUILD_DIR)/easytier" --bin easytier-core \&\& $(TARGET_CROSS)strip --remove-section=.eh_frame --remove-section=.eh_frame_hdr $(PKG_INSTALL_DIR)/bin/easytier-core|}' package/easytier/Makefile
+    sed -i '/^# EASYTIER_COMPILE/{n;s|.*|Build/Compile=$(CARGO_PKG_VARS) cargo $(CARGO_PKG_ARGS) -Z build-std=std,panic_abort install -v --profile $(CARGO_PKG_PROFILE) --root $(PKG_INSTALL_DIR) --path "$(PKG_BUILD_DIR)/easytier" --bin easytier-core \&\& $(TARGET_CROSS)strip --remove-section=.eh_frame --remove-section=.eh_frame_hdr $(PKG_INSTALL_DIR)/bin/easytier-core|}' package/easytier/Makefile
   fi
 
   # --- Configure & build ---
-  printf 'CONFIG_PACKAGE_easytier=y\nCONFIG_PACKAGE_easytier-lite=y\n' >> .config
+  printf 'CONFIG_PACKAGE_easytier=y\n' >> .config
   make defconfig
 
   echo "--- Building packages ($SDK_NEW_FMT) ---"
@@ -264,22 +263,18 @@ run_step1() {
   # Copy from .pkgdir (survives post-build autoremove) rather than
   # extracting from apk (Alpine format is fragile).
   echo "--- Saving prebuilt binaries ---"
-  mkdir -p "$PREBUILT_DIR/default" "$PREBUILT_DIR/lite"
-  for variant in default lite; do
-    local pkgdir_name="easytier"
-    [[ "$variant" == "lite" ]] && pkgdir_name="easytier-lite"
-    local bin
-    bin=$(find build_dir \
-      -path "*/easytier-${variant}*/.pkgdir/${pkgdir_name}/usr/bin/easytier-core" \
-      -type f 2>/dev/null | head -1) || true
-    if [[ -n "$bin" ]]; then
-      cp "$bin" "$PREBUILT_DIR/$variant/"
-      echo "  $variant: $(ls -lh "$PREBUILT_DIR/$variant/easytier-core" \
-        | awk '{print $5}')"
-    else
-      echo "  WARNING: easytier-core not found for variant '$variant'"
-    fi
-  done
+  mkdir -p "$PREBUILT_DIR/default"
+  local bin
+  bin=$(find build_dir \
+    -path "*/easytier-default*/.pkgdir/easytier/usr/bin/easytier-core" \
+    -type f 2>/dev/null | head -1) || true
+  if [[ -n "$bin" ]]; then
+    cp "$bin" "$PREBUILT_DIR/default/"
+    echo "  default: $(ls -lh "$PREBUILT_DIR/default/easytier-core" \
+      | awk '{print $5}')"
+  else
+    echo "  WARNING: easytier-core not found for default variant"
+  fi
 
   # Cleanup
   cd "$WORKSPACE"
@@ -293,11 +288,9 @@ run_step2() {
   banner "Step 2: $SDK_LEGACY_VER SDK (package $SDK_LEGACY_FMT)"
 
   # Verify prebuilt binaries exist (produced by Step 1)
-  if [[ ! -f "$PREBUILT_DIR/default/easytier-core" \
-     || ! -f "$PREBUILT_DIR/lite/easytier-core" ]]; then
+  if [[ ! -f "$PREBUILT_DIR/default/easytier-core" ]]; then
     echo "ERROR: prebuilt binaries not found in $PREBUILT_DIR" >&2
     echo "  Expected: $PREBUILT_DIR/default/easytier-core" >&2
-    echo "  Expected: $PREBUILT_DIR/lite/easytier-core" >&2
     exit 1
   fi
 
@@ -320,7 +313,7 @@ run_step2() {
   cp -r "$WORKSPACE/files" package/easytier/
 
   # --- Configure & build ---
-  printf 'CONFIG_PACKAGE_easytier=y\nCONFIG_PACKAGE_easytier-lite=y\n' >> .config
+  printf 'CONFIG_PACKAGE_easytier=y\n' >> .config
   make defconfig
 
   echo "--- Building packages ($SDK_LEGACY_FMT) — prebuilt only ---"

@@ -64,8 +64,8 @@ CARGO_PKG_VARS += PROTOC=$(STAGING_DIR_HOSTPKG)/bin/protoc
 # rules.mk: staging_dir/toolchain-<arch>_gcc-<ver>_musl.
 CARGO_PKG_VARS += BINDGEN_EXTRA_CLANG_ARGS="-nostdinc -I$(TOOLCHAIN_DIR)/include -I$(TOOLCHAIN_DIR)/usr/include"
 
-# ============ common ============
-define Package/easytier/Default
+# ============ easytier ============
+define Package/easytier
   SECTION:=net
   CATEGORY:=Network
   SUBMENU:=VPN
@@ -74,47 +74,13 @@ define Package/easytier/Default
   DEPENDS:=+kmod-tun $(RUST_ARCH_DEPENDS)
 endef
 
-define Package/easytier/Default/description
+define Package/easytier/description
   EasyTier is a simple, decentralized and secure mesh VPN
   with WireGuard support. It connects your devices into a
   single virtual LAN, even behind NAT.
 endef
 
-# ============ easytier-lite ============
-define Package/easytier-lite
-  $(call Package/easytier/Default)
-  TITLE+= (lite build)
-  VARIANT:=lite
-  PROVIDES:=easytier
-endef
-
-define Package/easytier-lite/description
-  $(call Package/easytier/Default/description)
-  .
-  This lite build removes wireguard, socks5, smoltcp, quic and
-  websocket features. Suitable for routers with limited flash storage.
-endef
-
-# ============ easytier (default) ===========
-define Package/easytier
-  $(call Package/easytier/Default)
-  TITLE+= (default build)
-  VARIANT:=default
-  DEFAULT_VARIANT:=1
-  CONFLICTS:=easytier-lite
-endef
-
-define Package/easytier/description
-  $(call Package/easytier/Default/description)
-  .
-  This default build includes all default Cargo features: wireguard, socks5, smoltcp.
-endef
-
 # ============ Build/Compile ============
-ifeq ($(BUILD_VARIANT),lite)
-  RUST_PKG_FEATURES:=tun,magic-dns,kcp,faketcp,zstd,aes-gcm
-endif
-
 # Cargo profile optimizations for release builds.
 # These are exported as environment variables read directly by cargo.
 # Since CARGO_PKG_VARS above now contains matching values, command-prefix
@@ -136,16 +102,8 @@ export RUSTFLAGS := --remap-path-prefix="$(CURDIR)/=" --remap-path-prefix="$(PKG
 # Only build easytier-core (skip easytier-cli which is not packaged).
 # Each Build/Compile is a single line (no backslash continuation)
 # so that CI sed can target it via the EASYTIER_COMPILE_* markers.
-
-ifeq ($(BUILD_VARIANT),lite)
-# EASYTIER_COMPILE_LITE
-Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core --no-default-features) && $(TARGET_CROSS)strip --remove-section=.eh_frame --remove-section=.eh_frame_hdr $(PKG_INSTALL_DIR)/bin/easytier-core
-endif
-
-ifeq ($(BUILD_VARIANT),default)
-# EASYTIER_COMPILE_DEFAULT
+# EASYTIER_COMPILE
 Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core) && $(TARGET_CROSS)strip --remove-section=.eh_frame --remove-section=.eh_frame_hdr $(PKG_INSTALL_DIR)/bin/easytier-core
-endif
 
 # Override Build/Prepare to handle case-sensitive directory name
 # mismatch.  The codeload tarball top-level directory is EasyTier-x.y.z
@@ -159,9 +117,6 @@ define Build/Prepare
 	$(Build/Patch/Default)
 endef
 
-# Define install for easytier (default).  easytier-lite shares the same
-# install via a variable alias (jq-style).  RustBinPackage uses ifndef, so
-# defining install here prevents it from generating a duplicate default rule.
 define Package/easytier/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/bin/easytier-core $(1)/usr/bin
@@ -171,10 +126,5 @@ define Package/easytier/install
 	$(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
 endef
 
-Package/easytier-lite/install = $(Package/easytier/install)
-
-$(eval $(call RustBinPackage,easytier-lite))
 $(eval $(call RustBinPackage,easytier))
-
-$(eval $(call BuildPackage,easytier-lite))
 $(eval $(call BuildPackage,easytier))

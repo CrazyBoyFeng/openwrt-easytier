@@ -1,19 +1,10 @@
 # openwrt-easytier
 
-[EasyTier](https://github.com/EasyTier/EasyTier) OpenWrt package (lite & default variants of easytier-core).
+[EasyTier](https://github.com/EasyTier/EasyTier) OpenWrt package (easytier-core).
 
 EasyTier is a simple, decentralized and secure mesh VPN with WireGuard support, connecting your devices into a single virtual LAN, even behind NAT.
 
-## Build Variants
-
-| Variant | Package | Features |
-|---------|---------|----------|
-| lite | `easytier-lite` | tun, magic-dns, kcp, faketcp, zstd, aes-gcm |
-| default | `easytier` | all default features |
-
-Removed from lite: `wireguard`, `socks5`, `smoltcp`, `quic`, `websocket`. Users can install standalone OS packages (`wireguard-tools`, `microsocks`) if needed.
-
-Both variants install `easytier-core` binary only. No `easytier-cli` is included.
+This package installs `easytier-core` only. No `easytier-cli` is included.
 
 ## Quick Start
 
@@ -171,7 +162,7 @@ Options are following the [official documentation](https://easytier.cn/guide/net
 | `dhcp` | `0` | `--dhcp` | Auto-assign IP via DHCP |
 | `hostname` | (system) | `--hostname` | Device hostname for Magic DNS |
 | `instance_name` | (section) | `--instance-name` | Instance name |
-| `peers` | - | `--peers` | Peer node addresses. Transport: same as listeners; Discovery: `txt://`, `srv://` (all variants); `http://`, `https://` (default only) |
+| `peers` | - | `--peers` | Peer node addresses. Transport: same as listeners; Discovery: `txt://`, `srv://`; `http://`, `https://` |
 | `external_node` | (empty) | `--external-node` | Public shared node address (functionally equivalent to `peers`) |
 | `proxy_networks` | - | `--proxy-networks` | Export local subnets (supports mapping: `10.0.0.0/24->192.168.0.0/24`) |
 
@@ -186,7 +177,7 @@ Options are following the [official documentation](https://easytier.cn/guide/net
 
 | Option | Default | CLI Equivalent | Description |
 |--------|---------|---------------|-------------|
-| `listeners` | (auto) | `--listeners` | Accept connections. Three formats: plain port `<11010>` (tcp/udp on 11010, ws/wss on 11010+11011, wg on 11011); URL `<protocol://0.0.0.0:11010>` (protocol: `tcp`, `udp`, `ring`, `unix`, `wg`, `ws`, `wss`, `quic`, `faketcp`); shorthand `<proto:port>` (e.g. `wg:11011`). Variant availability: `tcp`, `udp`, `ring`, `unix`, `faketcp` (all); `wg`, `quic`, `ws`, `wss` (default only) |
+| `listeners` | (auto) | `--listeners` | Accept connections. Three formats: plain port `<11010>` (tcp/udp on 11010, ws/wss on 11010+11011, wg on 11011); URL `<protocol://0.0.0.0:11010>` (protocol: `tcp`, `udp`, `ring`, `unix`, `wg`, `ws`, `wss`, `quic`, `faketcp`); shorthand `<proto:port>` (e.g. `wg:11011`) |
 | `mapped_listeners` | - | `--mapped-listeners` | Public address for NAT traversal, e.g. `tcp://1.2.3.4:11010` |
 | `no_listener` | `0` | `--no-listener` | Don't listen on any port |
 | `default_protocol` | (auto) | `--default-protocol` | Default protocol for peer connections |
@@ -195,9 +186,9 @@ Options are following the [official documentation](https://easytier.cn/guide/net
 
 | Option | Default | CLI Equivalent | Description |
 |--------|---------|---------------|-------------|
-| `vpn_portal` | (empty) | `--vpn-portal` | VPN portal URL, e.g. `wg://0.0.0.0:11010/10.14.14.0/24` (**no effect in lite**) |
+| `vpn_portal` | (empty) | `--vpn-portal` | VPN portal URL, e.g. `wg://0.0.0.0:11010/10.14.14.0/24` |
 | `disable_encryption` | `0` | `--disable-encryption` | Disable encryption |
-| `encryption_algorithm` | `aes-gcm` | `--encryption-algorithm` | `xor`, `chacha20` (**not in lite**), `aes-gcm`, `aes-gcm-256`, `openssl-aes128-gcm`, `openssl-aes256-gcm`, `openssl-chacha20` (**openssl-* not available in packaged variants**) |
+| `encryption_algorithm` | `aes-gcm` | `--encryption-algorithm` | `xor`, `chacha20`, `aes-gcm`, `aes-gcm-256` |
 | `multi_thread` | `0` | `--multi-thread` | Enable multi-threaded runtime |
 | `multi_thread_count` | `2` | `--multi-thread-count` | Thread count (must be > 2, only with multi-thread) |
 | `disable_ipv6` | `0` | `--disable-ipv6` | Disable IPv6 |
@@ -208,7 +199,7 @@ Options are following the [official documentation](https://easytier.cn/guide/net
 | `enable_exit_node` | `0` | `--enable-exit-node` | Allow this node to be an exit node |
 | `proxy_forward_by_system` | `0` | `--proxy-forward-by-system` | Forward subnet proxy via kernel routing |
 | `no_tun` | `0` | `--no-tun` | Don't create TUN device |
-| `use_smoltcp` | `0` | `--use-smoltcp` | Enable smoltcp stack for subnet proxy and KCP (**no effect in lite**) |
+| `use_smoltcp` | `0` | `--use-smoltcp` | Enable smoltcp stack for subnet proxy and KCP |
 | `manual_routes` | - | `--manual-routes` | Manual route CIDRs (disables subnet proxy) |
 | `relay_network_whitelist` | (empty) | `--relay-network-whitelist` | Only relay traffic for whitelisted networks |
 | `p2p_only` | `0` | `--p2p-only` | Only communicate with established P2P peers |
@@ -220,13 +211,13 @@ Options are following the [official documentation](https://easytier.cn/guide/net
 | `disable_sym_hole_punching` | `0` | `--disable-sym-hole-punching` | Disable symmetric NAT hole punching |
 | `disable_upnp` | `0` | `--disable-upnp` | Disable UPnP/NAT-PMP automatic port mapping |
 | `relay_all_peer_rpc` | `0` | `--relay-all-peer-rpc` | Relay all peer RPC packets |
-| `socks5` | (empty) | `--socks5` | SOCKS5 proxy port number, e.g. `1080` (**not available in lite**) |
+| `socks5` | (empty) | `--socks5` | SOCKS5 proxy port number, e.g. `1080` |
 | `compression` | `none` | `--compression` | `none` or `zstd` |
 | `bind_device` | (empty) | `--bind-device` | Bind connector sockets to physical device |
 | `enable_kcp_proxy` | `0` | `--enable-kcp-proxy` | Use KCP proxy for TCP streams |
 | `disable_kcp_input` | `0` | `--disable-kcp-input` | Disallow KCP proxy input from other nodes |
-| `enable_quic_proxy` | `0` | `--enable-quic-proxy` | Use QUIC proxy for TCP streams (**no effect in lite**) |
-| `disable_quic_input` | `0` | `--disable-quic-input` | Disallow QUIC proxy input from other nodes (**no effect in lite**) |
+| `enable_quic_proxy` | `0` | `--enable-quic-proxy` | Use QUIC proxy for TCP streams |
+| `disable_quic_input` | `0` | `--disable-quic-input` | Disallow QUIC proxy input from other nodes |
 | `port_forward` | - | `--port-forward` | Port forwarding rules, e.g. `udp://0.0.0.0:12345/10.126.126.1:23456` |
 | `accept_dns` | `0` | `--accept-dns` | Enable Magic DNS |
 | `tld_dns_zone` | `et.net` | `--tld-dns-zone` | TLD DNS zone for Magic DNS |
@@ -237,8 +228,8 @@ Options are following the [official documentation](https://easytier.cn/guide/net
 | `udp_whitelist` | (empty) | `--udp-whitelist` | UDP port whitelist, comma-separated (supports ranges: `53`, `5000-6000`) |
 | `disable_relay_kcp` | `0` | `--disable-relay-kcp` | Disallow forwarding KCP packets |
 | `enable_relay_foreign_network_kcp` | `0` | `--enable-relay-foreign-network-kcp` | Allow relaying foreign network KCP |
-| `disable_relay_quic` | `0` | `--disable-relay-quic` | Disallow forwarding QUIC packets (**no effect in lite**) |
-| `enable_relay_foreign_network_quic` | `0` | `--enable-relay-foreign-network-quic` | Allow relaying foreign network QUIC (**no effect in lite**) |
+| `disable_relay_quic` | `0` | `--disable-relay-quic` | Disallow forwarding QUIC packets |
+| `enable_relay_foreign_network_quic` | `0` | `--enable-relay-foreign-network-quic` | Allow relaying foreign network QUIC |
 | `stun_servers` | (defaults) | `--stun-servers` | Override default STUN server list (empty list disables STUN) |
 | `stun_servers_v6` | (defaults) | `--stun-servers-v6` | Override default IPv6 STUN server list (empty list disables STUN) |
 
@@ -306,11 +297,8 @@ git clone https://github.com/CrazyBoyFeng/openwrt-easytier.git package/easytier
 # Configure
 make menuconfig
 
-# Build default variant
+# Build
 make package/easytier/compile V=s
-
-# Build lite variant
-make package/easytier/lite/compile V=s
 ```
 
 ## Log Viewing

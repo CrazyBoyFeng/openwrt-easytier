@@ -21,8 +21,8 @@ PKG_LICENSE:=Apache-2.0
 
 include $(INCLUDE_DIR)/package.mk
 
-# ============ common ============
-define Package/easytier/Default
+# ============ easytier ============
+define Package/easytier
   SECTION:=net
   CATEGORY:=Network
   SUBMENU:=VPN
@@ -31,49 +31,17 @@ define Package/easytier/Default
   DEPENDS:=+kmod-tun
 endef
 
-define Package/easytier/Default/description
+define Package/easytier/description
   EasyTier is a simple, decentralized and secure mesh VPN
   with WireGuard support. It connects your devices into a
   single virtual LAN, even behind NAT.
 endef
 
-# ============ easytier-lite ============
-define Package/easytier-lite
-  $(call Package/easytier/Default)
-  TITLE+= (lite build)
-  VARIANT:=lite
-  PROVIDES:=easytier
-endef
-
-define Package/easytier-lite/description
-  $(call Package/easytier/Default/description)
-  .
-  This lite build removes wireguard, socks5 and smoltcp features.
-  Suitable for routers with limited flash storage.
-endef
-
-# ============ easytier (default) ============
-define Package/easytier
-  $(call Package/easytier/Default)
-  TITLE+= (default build)
-  VARIANT:=default
-  DEFAULT_VARIANT:=1
-  CONFLICTS:=easytier-lite
-endef
-
-define Package/easytier/description
-  $(call Package/easytier/Default/description)
-  .
-  This default build includes all default Cargo features: wireguard, socks5, smoltcp.
-endef
-
 # ============ Build/Compile ============
 # Copy prebuilt binary from PREBUILT_DIR (set by CI).
-# PREBUILT_DIR contains per-variant subdirs: default/easytier-core, lite/easytier-core.
-# $(or $(BUILD_VARIANT),default) handles the default variant.
 # Single line (no define/endef) for sed-friendliness.
 # EASYTIER_COMPILE
-Build/Compile=mkdir -p $(PKG_INSTALL_DIR)/bin && $(CP) $(PREBUILT_DIR)/$(or $(BUILD_VARIANT),default)/easytier-core $(PKG_INSTALL_DIR)/bin/
+Build/Compile=mkdir -p $(PKG_INSTALL_DIR)/bin && $(CP) $(PREBUILT_DIR)/default/easytier-core $(PKG_INSTALL_DIR)/bin/
 
 # ============ Install ============
 define Package/easytier/install
@@ -85,7 +53,4 @@ define Package/easytier/install
 	$(INSTALL_BIN) ./files/etc/init.d/easytier $(1)/etc/init.d/easytier
 endef
 
-Package/easytier-lite/install = $(Package/easytier/install)
-
-$(eval $(call BuildPackage,easytier-lite))
 $(eval $(call BuildPackage,easytier))
