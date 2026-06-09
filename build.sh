@@ -237,10 +237,14 @@ run_step1() {
   make defconfig
   # Enable easytier variant packages after defconfig.
   # defconfig strips unknown CONFIG_PACKAGE_* options (easytier is a local
-  # package not installed via feeds), so we set them with scripts/config
-  # and re-run oldconfig to resolve dependencies.
-  ./scripts/config --set-val CONFIG_PACKAGE_easytier-core y
-  ./scripts/config --set-val CONFIG_PACKAGE_easytier-cli y
+  # package not installed via feeds), so we append them to .config and
+  # re-run oldconfig to resolve dependencies.
+  # Note: scripts/config is a binary that exists only in the full OpenWrt
+  # source tree, not in the SDK (where scripts/config is a directory).
+  sed -i '/CONFIG_PACKAGE_easytier-core/d' .config
+  sed -i '/CONFIG_PACKAGE_easytier-cli/d' .config
+  echo 'CONFIG_PACKAGE_easytier-core=y' >> .config
+  echo 'CONFIG_PACKAGE_easytier-cli=y' >> .config
   make oldconfig
 
   echo "--- Building packages ($SDK_NEW_FMT) ---"
