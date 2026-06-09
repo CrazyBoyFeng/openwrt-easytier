@@ -1,14 +1,23 @@
 # openwrt-easytier
 
-[EasyTier](https://github.com/EasyTier/EasyTier) OpenWrt package (easytier-core).
+[EasyTier](https://github.com/EasyTier/EasyTier) OpenWrt packages.
 
 EasyTier is a simple, decentralized and secure mesh VPN with WireGuard support, connecting your devices into a single virtual LAN, even behind NAT.
 
-This package installs `easytier-core` only. No `easytier-cli` is included.
+## Packages
+
+| Package | Description |
+|---------|-------------|
+| `easytier-core` | Core daemon binary, init script and UCI configuration |
+| `easytier-cli` | CLI management tool (connects to core via RPC, can be remote) |
+| `easytier` | Meta package that installs both core and cli |
 
 ## Quick Start
 
 ```sh
+# Install
+opkg install easytier-core easytier-cli
+
 # 1. Edit configuration
 vi /etc/config/easytier
 
@@ -297,8 +306,11 @@ git clone https://github.com/CrazyBoyFeng/openwrt-easytier.git package/easytier
 # Configure
 make menuconfig
 
-# Build
-make package/easytier/compile V=s
+# Build core
+make package/easytier-core/compile V=s
+
+# Build cli
+make package/easytier-cli/compile V=s
 ```
 
 ## Log Viewing
