@@ -132,12 +132,12 @@ export CARGO_PROFILE_RELEASE_STRIP=true
 
 ifeq ($(BUILD_VARIANT),lite)
 # EASYTIER_COMPILE_LITE
-Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core --no-default-features)
+Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core --no-default-features) && $(TARGET_CROSS)strip --remove-section=.eh_frame --remove-section=.eh_frame_hdr $(PKG_INSTALL_DIR)/bin/easytier-core
 endif
 
 ifeq ($(BUILD_VARIANT),default)
 # EASYTIER_COMPILE_DEFAULT
-Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core)
+Build/Compile=$(call Build/Compile/Cargo,easytier,--bin easytier-core) && $(TARGET_CROSS)strip --remove-section=.eh_frame --remove-section=.eh_frame_hdr $(PKG_INSTALL_DIR)/bin/easytier-core
 endif
 
 # Override Build/Prepare to handle case-sensitive directory name
