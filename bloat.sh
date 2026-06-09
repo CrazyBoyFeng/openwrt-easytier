@@ -613,10 +613,6 @@ with open(os.path.join(output_dir, 'inclusive-size-report.txt'), 'w') as f:
 
 # --- Output 2: Reverse Dependency Chains ---
 buf2 = io.StringIO()
-buf2.write("Reverse Dependency Chains (who depends on each crate)\n")
-buf2.write(f"Showing {len(self_sizes)} crates visible to bloaty\n")
-buf2.write(f"Reverse dependency graph from cargo tree ({len(graph)} crates)\n")
-buf2.write("\n")
 
 reverse_graph = {}
 for crate, deps in graph.items():
@@ -629,14 +625,12 @@ def print_reverse_tree(buf, crate, visited, prefix=""):
     for i, parent in enumerate(parents):
         is_last = (i == len(parents) - 1)
         connector = "\u2514\u2500\u2500 " if is_last else "\u251c\u2500\u2500 "
-        marker = ""
-        if parent in self_sizes:
-            marker = f" [bloaty: {fmt(self_sizes[parent])}]"
+        marker = f" [inclusive: {fmt(inclusive.get(parent, 0))}]"
         # Annotate with feature(s) that caused this dependency
         features = feature_map.get((parent, crate))
         if features:
             feature_str = ",".join(sorted(features))
-            buf.write(f"{prefix}{connector}{parent}[{feature_str}]{marker}\n")
+            buf.write(f"{prefix}{connector}{parent} [inclusive: {fmt(inclusive.get(parent, 0))}, feature: {feature_str}]\n")
         else:
             buf.write(f"{prefix}{connector}{parent}{marker}\n")
         extension = "    " if is_last else "\u2502   "
@@ -644,8 +638,7 @@ def print_reverse_tree(buf, crate, visited, prefix=""):
 
 for name, inc, nd in rows:
     total_parents = len(reverse_graph.get(name, set()))
-    buf2.write(f"{name}  [self: {fmt(self_sizes[name])}, inclusive: {fmt(inc)}, "
-               f"used by {total_parents} crates]\n")
+    buf2.write(f"{name}  [inclusive: {fmt(inc)}, used by {total_parents} crates]\n")
     print_reverse_tree(buf2, name, set())
     buf2.write("\n")
 
