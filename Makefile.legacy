@@ -29,8 +29,6 @@ define Package/easytier-core
   TITLE:=EasyTier P2P Mesh VPN (core daemon)
   URL:=https://github.com/EasyTier/EasyTier
   DEPENDS:=+kmod-tun
-  VARIANT:=core
-  DEFAULT_VARIANT:=1
 endef
 
 define Package/easytier-core/description
@@ -50,7 +48,6 @@ define Package/easytier-cli
   TITLE:=EasyTier CLI management tool
   URL:=https://github.com/EasyTier/EasyTier
   DEPENDS:=+easytier-core
-  VARIANT:=cli
 endef
 
 define Package/easytier-cli/description
@@ -79,17 +76,10 @@ define Package/easytier/description
 endef
 
 # ============ Build/Compile ============
-# Copy prebuilt binary from PREBUILT_DIR (set by CI).
-# Default is empty: meta package (no BUILD_VARIANT) has nothing to compile.
-# Variant-specific ifeq blocks below override for core and cli.
-# EASYTIER_COMPILE
-Build/Compile=
-ifeq ($(BUILD_VARIANT),core)
-Build/Compile=mkdir -p $(PKG_INSTALL_DIR)/bin && $(CP) $(PREBUILT_DIR)/easytier-core $(PKG_INSTALL_DIR)/bin/
-endif
-ifeq ($(BUILD_VARIANT),cli)
-Build/Compile=mkdir -p $(PKG_INSTALL_DIR)/bin && $(CP) $(PREBUILT_DIR)/easytier-cli $(PKG_INSTALL_DIR)/bin/
-endif
+# Copy prebuilt binaries from PREBUILT_DIR (set by CI).
+# Both binaries are copied in one step; each Package/*/install
+# picks only the files it needs.
+Build/Compile=mkdir -p $(PKG_INSTALL_DIR)/bin && $(CP) $(PREBUILT_DIR)/easytier-core $(PREBUILT_DIR)/easytier-cli $(PKG_INSTALL_DIR)/bin/
 
 # ============ Install ============
 define Package/easytier-core/install

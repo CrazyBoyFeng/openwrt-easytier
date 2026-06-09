@@ -330,11 +330,10 @@ run_step2() {
   cp -r "$WORKSPACE/files" package/easytier/
 
   # --- Configure & build ---
+  printf 'CONFIG_PACKAGE_easytier-core=y
+CONFIG_PACKAGE_easytier-cli=y
+' >> .config
   make defconfig
-  # Enable easytier variant packages after defconfig.
-  ./scripts/config --set-val CONFIG_PACKAGE_easytier-core y
-  ./scripts/config --set-val CONFIG_PACKAGE_easytier-cli y
-  make oldconfig
 
   echo "--- Building packages ($SDK_LEGACY_FMT) — prebuilt only ---"
   make package/easytier/compile V=s PREBUILT_DIR="$PREBUILT_DIR" || \
