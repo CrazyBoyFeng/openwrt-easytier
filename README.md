@@ -9,7 +9,7 @@ EasyTier is a simple, decentralized and secure mesh VPN with WireGuard support, 
 | Package | Description |
 |---------|-------------|
 | `easytier-core` | Core daemon binary, init script and UCI configuration |
-| `easytier-cli` | CLI management tool (connects to core via RPC, can be remote) |
+| `easytier-cli` | CLI management tool (connects to core via RPC) |
 | `easytier` | Meta package that installs both core and cli |
 
 > **Note:** Installing `easytier-cli` is optional. All EasyTier functionality works with `easytier-core` alone. If you want to monitor the running status, you can also connect from an `easytier-cli` or `easytier-gui` installed on another device via the RPC interface.
@@ -17,23 +17,20 @@ EasyTier is a simple, decentralized and secure mesh VPN with WireGuard support, 
 ## Quick Start
 
 ```sh
-# Install
-opkg install easytier-core easytier-cli
-
-# 1. Edit configuration
+# Edit configuration
 vi /etc/config/easytier
 
-# 2. Set network name and secret (REQUIRED)
+# Set network name and secret (REQUIRED)
 uci set easytier.easytier.network_name='my-private-network'
 uci set easytier.easytier.network_secret='my-secret-password'
 
-# 3. Set your virtual IP or leave empty for DHCP auto-assign
+# Set your virtual IP or leave empty for DHCP auto-assign
 uci set easytier.easytier.ipv4='10.144.144.1/24'
 
-# 4. Add peer nodes
+# Add peer nodes
 uci add_list easytier.easytier.peers='tcp://peer.example.com:11010'
 
-# 5. Commit and start
+# Commit and start
 uci commit easytier
 /etc/init.d/easytier enable
 /etc/init.d/easytier start
@@ -41,7 +38,7 @@ uci commit easytier
 
 ## External Config Modes
 
-When `config_server` or `config_dir` is set, **network interface, firewall, and DNS can NOT auto-configured.** Users must manually set up the following three parts.
+When `config_server` or `config_dir` is set, **network interface, firewall, and DNS can NOT be auto-configured.** Users must manually set up the following three parts.
 
 > **Prerequisite:** Find your TUN device name first. Run `ip link` after starting EasyTier, or check `logread | grep easytier` for the device name. The following examples assume the device name is `et0`.
 
@@ -138,11 +135,11 @@ Then reload the services:
 
 ## UCI Configuration
 
-Options are defined in `config easytier` sections in `/etc/config/easytier`.
+Options are defined in `config easytier` sections in `/etc/config/easytier` of `easytier-core`.
 
 Multiple `config easytier` sections can be defined for multi-instance (each section starts an independent `easytier-core` process with its own TUN device and firewall zone). The **section name** is used as the default value for `--instance-name` and `--dev-name` (`et_{section_name}`).
 
-Options are following the [official documentation](https://easytier.cn/guide/network/configurations.html).
+Options are following the `easytier-core --help`.
 
 ### Config Settings
 
