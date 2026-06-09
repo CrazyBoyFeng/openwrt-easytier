@@ -232,7 +232,7 @@ run_step1() {
   fi
 
   # --- Configure & build ---
-  printf 'CONFIG_PACKAGE_easytier-core=y\nCONFIG_PACKAGE_easytier-cli=y\nCONFIG_PACKAGE_easytier=y\n' >> .config
+  printf 'CONFIG_PACKAGE_easytier-core=y\nCONFIG_PACKAGE_easytier-cli=y\n' >> .config
   make defconfig
 
   echo "--- Building packages ($SDK_NEW_FMT) ---"
@@ -318,7 +318,7 @@ run_step2() {
   cp -r "$WORKSPACE/files" package/easytier/
 
   # --- Configure & build ---
-  printf 'CONFIG_PACKAGE_easytier-core=y\nCONFIG_PACKAGE_easytier-cli=y\nCONFIG_PACKAGE_easytier=y\n' >> .config
+  printf 'CONFIG_PACKAGE_easytier-core=y\nCONFIG_PACKAGE_easytier-cli=y\n' >> .config
   make defconfig
 
   echo "--- Building packages ($SDK_LEGACY_FMT) — prebuilt only ---"
