@@ -6,7 +6,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=easytier
 PKG_VERSION:=2.6.4
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
 PKG_SOURCE_URL:=https://codeload.github.com/EasyTier/EasyTier/tar.gz/v$(PKG_VERSION)?
@@ -19,7 +19,7 @@ PKG_HASH:=352c0866da709415a837405a6ce4f51b8dfae27e5d5c1da1fb4d8f7338e46795
 # --strip-components=1 to flatten the tarball into PKG_BUILD_DIR.
 PKG_SOURCE_SUBDIR:=EasyTier-$(PKG_VERSION)
 
-PKG_MAINTAINER:=CrazyBoyFeng
+PKG_MAINTAINER:=CrazyBoyFeng <crazyboyfeng@live.com>
 PKG_LICENSE:=Apache-2.0
 PKG_LICENSE_FILES:=LICENSE
 
