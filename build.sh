@@ -280,7 +280,7 @@ run_step1() {
   for bin_name in easytier-core easytier-cli; do
     local bin
     bin=$(find build_dir \
-      -path "*/.pkgdir/easytier-core/usr/bin/${bin_name}" \
+      -path "*/.pkgdir/${bin_name}/usr/bin/${bin_name}" \
       -type f 2>/dev/null | head -1) || true
     if [[ -n "$bin" ]]; then
       cp "$bin" "$PREBUILT_DIR/"
