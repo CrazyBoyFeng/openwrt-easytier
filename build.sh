@@ -31,7 +31,7 @@ SDK_NEW_EXT="zst"
 
 SDK_LEGACY_VER="24.10.7"
 SDK_LEGACY_FMT="ipk"
-SDK_LEGACY_EXT="xz"
+SDK_LEGACY_EXT="zst"
 
 SDK_BASE_URL="https://downloads.openwrt.org/releases"
 
